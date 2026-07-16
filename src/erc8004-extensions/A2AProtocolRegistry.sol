@@ -459,6 +459,13 @@ contract A2AProtocolRegistry is Ownable {
     }
     
     /**
+     * @dev Get all task IDs created by a user
+     */
+    function getUserTasks(address user) external view returns (uint256[] memory) {
+        return _userTasks[user];
+    }
+
+    /**
      * @dev Search agents by skill
      */
     function searchAgentsBySkill(uint256 skillId) external view returns (uint256[] memory agentIds) {
