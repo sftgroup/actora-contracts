@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import "./BaseReputationRegistry.sol";
-import "../interfaces/IERC8004Reputation.sol";
+import "../erc8004-interfaces/IERC8004Reputation.sol";
 
 /**
  * @title ReputationRegistry

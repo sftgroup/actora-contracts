@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-import "../interfaces/IERC8004Identity.sol";
+import "../erc8004-interfaces/IERC8004Identity.sol";
 
 /**
  * @title IdentityRegistry

@@ -3,7 +3,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interfaces/IERC8004Identity.sol";
+import "../erc8004-interfaces/IERC8004Identity.sol";
 import "./MultiEndpointRegistry.sol";
 
 /**
