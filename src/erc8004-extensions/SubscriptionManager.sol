@@ -16,7 +16,7 @@ import "./TokenPriceOracle.sol";
  * @dev Enhanced subscription management for AI Agent services with recurring and usage-based payments
  * @notice Production-ready subscription system with flexible billing and auto-renewal
  */
-contract SubscriptionManager is Ownable, ReentrancyGuard {
+contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.UintSet;
     
     IERC8004Identity public immutable identityRegistry;

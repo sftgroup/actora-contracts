@@ -13,7 +13,7 @@ import "../erc8004-interfaces/IERC8004Identity.sol";
  * @title IdentityRegistry
  * @dev ERC-8004 Identity Registry implementation based on ERC-721
  */
-contract IdentityRegistry is ERC721, ERC721URIStorage, Ownable, IERC8004Identity {
+contract ERC8004IdentityRegistry is ERC721, ERC721URIStorage, Ownable, IERC8004Identity {
     using EnumerableSet for EnumerableSet.UintSet;
     
     uint256 private _agentIdCounter;

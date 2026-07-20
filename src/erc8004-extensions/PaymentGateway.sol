@@ -23,7 +23,7 @@ contract PaymentGateway is Ownable, ReentrancyGuard {
     IERC8004Identity public immutable identityRegistry;
     IERC721 public immutable erc721Identity;
     AgentWallet public immutable agentWallet;
-    SubscriptionManager public immutable subscriptionManager;
+    ERC8004SubscriptionManager public immutable subscriptionManager;
     TokenPriceOracle public priceOracle;
     
     enum PaymentType {
@@ -259,7 +259,7 @@ contract PaymentGateway is Ownable, ReentrancyGuard {
         identityRegistry = IERC8004Identity(_identityRegistry);
         erc721Identity = IERC721(_identityRegistry);
         agentWallet = AgentWallet(_agentWallet);
-        subscriptionManager = SubscriptionManager(_subscriptionManager);
+        subscriptionManager = ERC8004SubscriptionManager(_subscriptionManager);
         priceOracle = TokenPriceOracle(_priceOracle);
         platformFeeCollector = _feeCollector;
         platformFeePercentage = 0; // 0% platform fee initially

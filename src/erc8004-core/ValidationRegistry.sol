@@ -11,7 +11,7 @@ import "../erc8004-interfaces/IERC8004Validation.sol";
  * @dev ERC-8004 Validation Registry implementation
  */
 contract ValidationRegistry is Ownable, IERC8004Validation {
-    IdentityRegistry public immutable identityRegistry;
+    ERC8004IdentityRegistry public immutable identityRegistry;
     
     struct ValidationRequestData {
         address validatorAddress;
@@ -38,7 +38,7 @@ contract ValidationRegistry is Ownable, IERC8004Validation {
         if (_identityRegistry == address(0)) {
             revert ERC8004__ZeroAddress();
         }
-        identityRegistry = IdentityRegistry(_identityRegistry);
+        identityRegistry = ERC8004IdentityRegistry(_identityRegistry);
     }
     
     function validationRequest(

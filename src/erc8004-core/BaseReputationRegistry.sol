@@ -14,7 +14,7 @@ import "./IdentityRegistry.sol";
 abstract contract BaseReputationRegistry is Ownable {
     using ECDSA for bytes32;
     
-    IdentityRegistry public immutable identityRegistry;
+    ERC8004IdentityRegistry public immutable identityRegistry;
     
     struct Feedback {
         uint8 score;
@@ -50,7 +50,7 @@ abstract contract BaseReputationRegistry is Ownable {
         if (_identityRegistry == address(0)) {
             revert BaseReputation__InvalidIdentityRegistry();
         }
-        identityRegistry = IdentityRegistry(_identityRegistry);
+        identityRegistry = ERC8004IdentityRegistry(_identityRegistry);
     }
     
     // Internal functions for storage access
