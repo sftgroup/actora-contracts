@@ -1,6 +1,6 @@
 # AgentX Contracts — Deployment & Reference
 
-> Last updated: 2026-07-14 00:10 (platform contracts sourced from Blockscout)
+> Last updated: 2026-07-21 (full L1 6-contract suite)
 
 ---
 
@@ -29,9 +29,10 @@
 | SubscriptionManager | v3 | `0x019AC9d945467478Dd371CDbD70cb2f325800E6B` | `0x8E86...60ba` |
 | ReputationRegistry | v1 | `0x6a18C2664E1b42063860d864b6448b824d7B843F` | `0x8E86...60ba` |
 | ConfigurationRegistry | v1 | `0x07280674ccc2898Fd038A9e3C22005CA83ffD2F8` | `0x8E86...60ba` |
-| A2AProtocolRegistry | v2 | `0x7F42a7dC4A0F3C107664C3750bE1B5B6fa6BEb86` | `0x4F77...4103` |
+| A2AProtocolRegistry | v2 | `0x7F42a7dC4A0F3C107664C3750bE1B5B6fa6BEb86` | `0x8E86...60ba` |
+| MultiEndpointRegistry | v1 | `0xB361d04F49000013FC131D3C59C41c8486C64f8c` | `0x8E86...60ba` |
 
-> Deployed 2026-07-21. Platform contracts (#3-#5 now deployed). A2AProtocolRegistry deployed via forge create from `contracts/src/erc8004-extensions/A2AProtocolRegistry.sol`.
+> Deployed 2026-07-21. Full 6-contract suite deployed on L1. A2AProtocolRegistry v2 deployed via forge create from `contracts/src/erc8004-extensions/A2AProtocolRegistry.sol`.
 
 ### RPC Endpoints
 
