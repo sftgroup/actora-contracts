@@ -25,10 +25,13 @@
 
 | Contract | Version | Address | Owner |
 |----------|---------|---------|-------|
-| IdentityRegistry | v1 | `0x0292af212Ce34bbCd95BbC69F4F8c9f7ae123902` | `0x8E86...60ba` |
-| SubscriptionManager | v3 | `0x37BA9DdfE66Aa86f920a34Ae0ae268342151E249` | `0x8E86...60ba` |
+| IdentityRegistry | v1 | `0xbf5F9db266c8c97E3334466C88597Eb758AfE212` | `0x8E86...60ba` |
+| SubscriptionManager | v3 | `0x019AC9d945467478Dd371CDbD70cb2f325800E6B` | `0x8E86...60ba` |
+| ReputationRegistry | v1 | `0x6a18C2664E1b42063860d864b6448b824d7B843F` | `0x8E86...60ba` |
+| ConfigurationRegistry | v1 | `0x07280674ccc2898Fd038A9e3C22005CA83ffD2F8` | `0x8E86...60ba` |
+| A2AProtocolRegistry | v2 | `0x7F42a7dC4A0F3C107664C3750bE1B5B6fa6BEb86` | `0x4F77...4103` |
 
-> Platform contracts (#3-#8) not yet deployed to L1. Source in `contracts/src/platform/`.
+> Deployed 2026-07-21. Platform contracts (#3-#5 now deployed). A2AProtocolRegistry deployed via forge create from `contracts/src/erc8004-extensions/A2AProtocolRegistry.sol`.
 
 ### RPC Endpoints
 
