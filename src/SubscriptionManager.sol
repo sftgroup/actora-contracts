@@ -7,27 +7,33 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title SubscriptionManager v3
+ * @title SubscriptionManager (AgentX v3 — standalone)
+ * @custom:deprecated 该独立版 SubscriptionManager 将被弃用。
+ *                   新部署应使用 erc8004-extensions/SubscriptionManager.sol，
+ *                   它提供更丰富的功能: 订阅计划、按用量计费、自动续订等。
  * @notice On-chain subscription lifecycle for AgentX.
  *
- *         Features:
- *         — Platform fee (basis points, adjustable by owner, 0-2000 = 0%-20%)
- *         — Multi-currency support (native ETH + ERC20 tokens via tokenWhitelist)
- *         — Trial period with full refund if cancelled within trial window
- *           (payments held in escrow until trial ends, then released to creator)
- *         — ReentrancyGuard on state-changing external functions
+ *         特性:
+ *         — 平台费 (basis points, owner 可调, 0-2000 = 0%-20%)
+ *         — 多币种支持 (原生 ETH + ERC20 代币，通过 tokenWhitelist)
+ *         — 试用期内取消可全额退款 (资金托管至试用期结束)
+ *         — ReentrancyGuard 防重入保护
  *
  *         Status enum:
- *           0 = Inactive / non-existent
+ *           0 = Inactive / 不存在
  *           1 = Active
  *           2 = Expired
  *           3 = Cancelled
  *
  *         v3 Audit Fixes (2026-07-13):
- *         — Reentrancy: subscribe + cancelSubscription now write state before external calls
- *         — Creator fund lock: old subscription funds released before overwrite
- *         — Precision loss: confirmed (amount*bps)/10000 is correct ceil-through-div
- *         — selfdestruct: confirmed absent (false positive from audit tool)
+ *         — Reentrancy: subscribe + cancelSubscription 先写状态再外部调用
+ *         — Creator fund lock: 覆盖前释放旧订阅资金
+ *         — Precision loss: (amount*bps)/10000 整除舍入已验证
+ *         — selfdestruct: 不存在 (审计工具误报)
+ *
+ *         迁移路径:
+ *         1. 新部署 → 直接使用 erc8004-extensions/SubscriptionManager.sol
+ *         2. 已有部署 → 保持此合约。如需迁移，可部署新合约后更新前端合约地址
  */
 contract SubscriptionManager is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -79,6 +85,25 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
     event TokenWhitelistUpdated(address indexed token, bool allowed);
     event PlatformFeeCollected(address indexed token, uint256 amount);
 
+    // ── Custom Errors ──────────────────────────────────────────────────
+    error FeeTooHigh(uint256 maxBps);
+    error NoFeesCollected();
+    error EthWithdrawalFailed();
+    error TokenNotWhitelisted();
+    error Erc20PriceRequired();
+    error TrialDaysExceeded(uint256 maxDays);
+    error PlanNotActive();
+    error InsufficientEth();
+    error EthNotAcceptedForErc20();
+    error EthRefundFailed();
+    error SubscriptionNotActive();
+    error TrialNotActive();
+    error FundsAlreadyReleased();
+    error TrialNotEnded();
+    error NotSubscriber();
+    error NoCreatorFound();
+    error CreatorPaymentFailed();
+
     // ── State ────────────────────────────────────────────────────────────
 
     uint256 private _currentSubscriptionId;
@@ -98,14 +123,14 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
     // ── Constructor ──────────────────────────────────────────────────────
 
     constructor(uint256 _initialFeeBps) Ownable(msg.sender) {
-        require(_initialFeeBps <= 2000, "Fee too high");
+        if (_initialFeeBps > 2000) revert FeeTooHigh(2000);
         platformFeeBps = _initialFeeBps;
     }
 
     // ── Admin: Configure ─────────────────────────────────────────────────
 
     function setPlatformFee(uint256 _bps) external onlyOwner {
-        require(_bps <= 2000, "Max 20%");
+        if (_bps > 2000) revert FeeTooHigh(2000);
         emit PlatformFeeUpdated(platformFeeBps, _bps);
         platformFeeBps = _bps;
     }
@@ -121,7 +146,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         platformFeesCollected[token] = 0;
         if (token == address(0)) {
             (bool sent, ) = payable(to).call{value: amount}("");
-            require(sent, "ETH withdrawal failed");
+            if (!sent) revert EthWithdrawalFailed();
         } else {
             IERC20(token).safeTransfer(to, amount);
         }
@@ -140,8 +165,8 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         returns (uint256 planId)
     {
         if (payToken != address(0)) {
-            require(tokenWhitelist[payToken], "Token not whitelisted");
-            require(price > 0, "ERC20 price required");
+            if (!tokenWhitelist[payToken]) revert TokenNotWhitelisted();
+            if (price == 0) revert Erc20PriceRequired();
         }
         require(trialDays <= 30, "Trial max 30 days");
 
@@ -175,7 +200,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
      */
     function subscribe(uint256 planId) external payable nonReentrant returns (uint256 subscriptionId) {
         SubscriptionPlan storage plan = _plans[planId];
-        require(plan.active, "Plan not active");
+        if (!plan.active) revert PlanNotActive();
 
         // ── Cancel prior active subscription ──────────────────────────────
         // Fix #5: release escrowed funds for old subscription before overwriting
@@ -198,7 +223,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         // ── Validate payment ──────────────────────────────────────────────
         uint256 excess;
         if (plan.payToken == address(0)) {
-            require(msg.value >= plan.price, "Insufficient ETH");
+            if (msg.value < plan.price) revert InsufficientEth();
             excess = msg.value - plan.price;
         } else {
             require(msg.value == 0, "No ETH for ERC20 plans");
@@ -235,7 +260,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         if (plan.payToken == address(0)) {
             if (excess > 0) {
                 (bool refunded,) = payable(msg.sender).call{value: excess}("");
-                require(refunded, "ETH refund failed");
+                if (!refunded) revert EthRefundFailed();
             }
         } else {
             IERC20(plan.payToken).safeTransferFrom(msg.sender, address(this), plan.price);
@@ -257,10 +282,10 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
      */
     function releaseFunds(uint256 subscriptionId) external nonReentrant {
         Subscription storage s = _subscriptions[subscriptionId];
-        require(s.status == SubscriptionStatus.Active, "Not active");
-        require(s.trialActive, "No trial");
-        require(!s.fundsReleased, "Already released");
-        require(block.timestamp >= s.trialEndsAt, "Trial not ended");
+        if (s.status != SubscriptionStatus.Active) revert SubscriptionNotActive();
+        if (!s.trialActive) revert TrialNotActive();
+        if (s.fundsReleased) revert FundsAlreadyReleased();
+        if (block.timestamp < s.trialEndsAt) revert TrialNotEnded();
 
         // Write state first
         s.fundsReleased = true;
@@ -280,8 +305,8 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
      */
     function cancelSubscription(uint256 subscriptionId) external nonReentrant {
         Subscription storage s = _subscriptions[subscriptionId];
-        require(s.subscriber == msg.sender, "Not subscriber");
-        require(s.status == SubscriptionStatus.Active, "Not active");
+        if (s.subscriber != msg.sender) revert NotSubscriber();
+        if (s.status != SubscriptionStatus.Active) revert SubscriptionNotActive();
 
         // Trial refund: full refund if trialActive + within window + funds not released
         if (s.trialActive && !s.fundsReleased && block.timestamp < s.trialEndsAt && s.amountPaid > 0) {
@@ -299,7 +324,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
             // ── External call AFTER state ─────────────────────────────────
             if (refundToken == address(0)) {
                 (bool sent,) = payable(refundAddr).call{value: refundAmount}("");
-                require(sent, "Refund failed");
+                if (!sent) revert EthRefundFailed();
             } else {
                 IERC20(refundToken).safeTransfer(refundAddr, refundAmount);
             }
@@ -335,7 +360,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
                 break;
             }
         }
-        require(creator != address(0), "No creator found");
+        if (creator == address(0)) revert NoCreatorFound();
 
         uint256 platformCut = _calculateFee(s.amountPaid);
         uint256 creatorAmount = s.amountPaid - platformCut;
@@ -346,7 +371,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
                 emit PlatformFeeCollected(address(0), platformCut);
             }
             (bool sent,) = payable(creator).call{value: creatorAmount}("");
-            require(sent, "Creator payment failed");
+            if (!sent) revert CreatorPaymentFailed();
         } else {
             if (platformCut > 0) {
                 platformFeesCollected[s.payToken] += platformCut;

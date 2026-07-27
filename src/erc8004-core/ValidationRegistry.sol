@@ -3,7 +3,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./IdentityRegistry.sol";
+import "../erc8004-interfaces/IERC8004Identity.sol";
 import "../erc8004-interfaces/IERC8004Validation.sol";
 
 /**
@@ -11,7 +11,7 @@ import "../erc8004-interfaces/IERC8004Validation.sol";
  * @dev ERC-8004 Validation Registry implementation
  */
 contract ValidationRegistry is Ownable, IERC8004Validation {
-    ERC8004IdentityRegistry public immutable identityRegistry;
+    IERC8004Identity public immutable identityRegistry;
     
     struct ValidationRequestData {
         address validatorAddress;
@@ -38,7 +38,7 @@ contract ValidationRegistry is Ownable, IERC8004Validation {
         if (_identityRegistry == address(0)) {
             revert ERC8004__ZeroAddress();
         }
-        identityRegistry = ERC8004IdentityRegistry(_identityRegistry);
+        identityRegistry = IERC8004Identity(_identityRegistry);
     }
     
     function validationRequest(

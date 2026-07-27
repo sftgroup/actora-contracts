@@ -56,10 +56,10 @@ contract TokenPriceOracle is Ownable {
     error TokenPriceOracle__TokenNotSupported();
     error TokenPriceOracle__InvalidInput();
 
-    constructor() Ownable(msg.sender) {
-        // 初始化常用代币
-        _initializeDefaultTokens();
-    }
+    /// @dev No longer hardcodes mainnet token addresses. Tokens must be added
+    ///      via addToken() after deployment. For convenience, deploy scripts may
+    ///      batch-add tokens using addToken() for the target chain.
+    constructor() Ownable(msg.sender) {}
     
     /**
      * @dev Add supported token
@@ -300,78 +300,6 @@ contract TokenPriceOracle is Ownable {
         }
         
         return _tokenPrices[token];
-    }
-    
-    /**
-     * @dev Initialize default tokens
-     */
-    function _initializeDefaultTokens() internal {
-        // 修复：直接初始化代币配置，不调用外部函数
-        address usdt = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        address dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-        address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-        address wbtc = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
-        
-        // USDT
-        _tokenConfigs[usdt] = TokenConfig({
-            token: usdt,
-            symbol: "USDT",
-            decimals: 6,
-            isActive: true,
-            lastUpdate: 0
-        });
-        _symbolToToken["USDT"] = usdt;
-        _supportedTokens.push(usdt);
-        emit TokenAdded(usdt, "USDT", 6, true);
-        
-        // USDC
-        _tokenConfigs[usdc] = TokenConfig({
-            token: usdc,
-            symbol: "USDC",
-            decimals: 6,
-            isActive: true,
-            lastUpdate: 0
-        });
-        _symbolToToken["USDC"] = usdc;
-        _supportedTokens.push(usdc);
-        emit TokenAdded(usdc, "USDC", 6, true);
-        
-        // DAI
-        _tokenConfigs[dai] = TokenConfig({
-            token: dai,
-            symbol: "DAI",
-            decimals: 18,
-            isActive: true,
-            lastUpdate: 0
-        });
-        _symbolToToken["DAI"] = dai;
-        _supportedTokens.push(dai);
-        emit TokenAdded(dai, "DAI", 18, true);
-        
-        // WETH
-        _tokenConfigs[weth] = TokenConfig({
-            token: weth,
-            symbol: "WETH",
-            decimals: 18,
-            isActive: true,
-            lastUpdate: 0
-        });
-        _symbolToToken["WETH"] = weth;
-        _supportedTokens.push(weth);
-        emit TokenAdded(weth, "WETH", 18, true);
-        
-        // WBTC
-        _tokenConfigs[wbtc] = TokenConfig({
-            token: wbtc,
-            symbol: "WBTC",
-            decimals: 8,
-            isActive: true,
-            lastUpdate: 0
-        });
-        _symbolToToken["WBTC"] = wbtc;
-        _supportedTokens.push(wbtc);
-        emit TokenAdded(wbtc, "WBTC", 8, true);
     }
     
     /**

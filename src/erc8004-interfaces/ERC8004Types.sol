@@ -11,27 +11,4 @@ library ERC8004Types {
         string key;
         bytes value;
     }
-    
-    enum EndpointType {
-        A2A,
-        MCP,
-        OASF,
-        HTTP,
-        WebSocket,
-        GRPC,
-        ENS,
-        DID,
-        AGENT_WALLET
-    }
-    
-    struct Endpoint {
-        EndpointType endpointType;
-        string name;
-        string endpoint;
-        string version;
-        string capabilities;
-        uint256 chainId;
-        uint256 createdAt;
-        bool isActive;
-    }
 }

@@ -6,10 +6,19 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title IdentityRegistry
+ * @title IdentityRegistry (AgentX v1 — minimal)
+ * @custom:deprecated 这个简化版 IdentityRegistry 将被弃用。
+ *                   新功能应迁移到 erc8004-core/IdentityRegistry.sol，
+ *                   该版本实现了完整的 IERC8004Identity 接口并支持
+ *                   注册费、分页查询、burn 等能力。
  * @notice ERC-721 Agent NFT registry for AgentX platform.
- *         Each Agent is minted as an NFT with extensible key-value metadata.
- *         Implements the exact ABI expected by agentx-sdk AgentRegistry.
+ *         每个 Agent 作为 NFT 铸造，支持可扩展键值元数据。
+ *         兼容 agentx-sdk AgentRegistry 的 ABI。
+ *
+ *         迁移路径:
+ *         1. 新部署 → 直接使用 erc8004-core/IdentityRegistry.sol
+ *         2. 已有部署 → 保持此合约不变，ERC8004 扩展可使用适配器
+ *         3. ERC8004 扩展当前依赖 IERC8004Identity，若接入此合约需实现该接口
  */
 contract IdentityRegistry is ERC721URIStorage, Ownable {
     // State
