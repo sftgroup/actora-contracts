@@ -207,6 +207,15 @@ contract ERC8004IdentityRegistry is ERC721, ERC721URIStorage, Ownable, IERC8004I
     }
     
     // Override required functions from ERC721 and ERC721URIStorage
+    function ownerOf(uint256 tokenId)
+        public
+        view
+        override(ERC721, IERC721, IERC8004Identity)
+        returns (address)
+    {
+        return super.ownerOf(tokenId);
+    }
+
     function tokenURI(uint256 tokenId)
         public
         view
