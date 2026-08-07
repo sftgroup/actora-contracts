@@ -48,6 +48,11 @@ interface IERC8004Identity {
     function getMetadata(uint256 agentId, string memory key) external view returns (bytes memory value);
     
     /**
+     * @dev Get the owner of an agent (ERC-721 ownerOf)
+     */
+    function ownerOf(uint256 agentId) external view returns (address);
+
+    /**
      * @dev Check if agent exists
      */
     function agentExists(uint256 agentId) external view returns (bool);
