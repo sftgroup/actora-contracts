@@ -17,8 +17,8 @@ import "../erc8004-interfaces/IERC8004Identity.sol";
 contract AgentWallet is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
     
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     
     struct WalletBalance {
         uint256 nativeBalance;
@@ -156,6 +156,8 @@ contract AgentWallet is Ownable, ReentrancyGuard {
         address token
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error AgentWallet__AgentNotOwner();
     error AgentWallet__InsufficientBalance();
@@ -177,6 +179,16 @@ contract AgentWallet is Ownable, ReentrancyGuard {
         erc721Identity = IERC721(_identityRegistry);
         _transactionCounter = 0;
         _authorizationCounter = 0;
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert AgentWallet__InvalidAgent();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**

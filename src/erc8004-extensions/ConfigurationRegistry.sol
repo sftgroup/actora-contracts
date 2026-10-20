@@ -12,8 +12,8 @@ import "../erc8004-interfaces/IERC8004Identity.sol";
  * @notice Production-ready configuration registry with efficient storage
  */
 contract ConfigurationRegistry is Ownable {
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     uint256 private _configCounter; // 修复：使用原生计数器替代Counters
     
     struct ConfigEntry {
@@ -59,6 +59,8 @@ contract ConfigurationRegistry is Ownable {
         string configKey
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error Configuration__AgentNotOwner();
     error Configuration__ConfigNotFound();
@@ -73,6 +75,16 @@ contract ConfigurationRegistry is Ownable {
         identityRegistry = IERC8004Identity(_identityRegistry);
         erc721Identity = IERC721(_identityRegistry);
         _configCounter = 0; // 初始化计数器
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert Configuration__InvalidInput();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**

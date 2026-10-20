@@ -12,8 +12,8 @@ import "../erc8004-interfaces/IERC8004Identity.sol";
  * @notice Supports different communication protocols and endpoint types
  */
 contract MultiEndpointRegistry is Ownable {
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     
     // 修复：手动实现计数器
     uint256 private _endpointCounter;
@@ -74,6 +74,8 @@ contract MultiEndpointRegistry is Ownable {
         uint256 maxEndpointsPerAgent
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error MultiEndpoint__AgentNotOwner();
     error MultiEndpoint__EndpointNotFound();
@@ -93,6 +95,16 @@ contract MultiEndpointRegistry is Ownable {
         _endpointCounter = 1;
         
         _initializeDefaultProtocols();
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert MultiEndpoint__InvalidInput();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**

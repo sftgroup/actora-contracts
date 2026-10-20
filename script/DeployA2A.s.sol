@@ -14,12 +14,6 @@ import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry
  *             --rpc-url $SEPOLIA_RPC \
  *             --broadcast --verify \
  *             --constructor-args 0x000000000000000000000000e94ad380d3F8d08a7590eda0C84f354a93F96e5F
- *
- *         OxaChain L1:
- *           forge script script/DeployA2A.s.sol:DeployA2A \
- *             --rpc-url http://REDACTED_HOST:18545 \
- *             --broadcast --legacy \
- *             --constructor-args 0x000000000000000000000000bf5F9db266c8c97E3334466C88597Eb758AfE212
  */
 contract DeployA2A is Script {
     function run() external {

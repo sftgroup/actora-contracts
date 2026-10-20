@@ -11,7 +11,7 @@ import "../erc8004-interfaces/IERC8004Validation.sol";
  * @dev ERC-8004 Validation Registry implementation
  */
 contract ValidationRegistry is Ownable, IERC8004Validation {
-    IERC8004Identity public immutable identityRegistry;
+    IERC8004Identity public identityRegistry;
     
     struct ValidationRequestData {
         address validatorAddress;
@@ -34,11 +34,22 @@ contract ValidationRegistry is Ownable, IERC8004Validation {
     mapping(uint256 => bytes32[]) public agentValidations;
     mapping(address => bytes32[]) public validatorRequests;
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     constructor(address _identityRegistry) Ownable(msg.sender) {
         if (_identityRegistry == address(0)) {
             revert ERC8004__ZeroAddress();
         }
         identityRegistry = IERC8004Identity(_identityRegistry);
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert ERC8004__ZeroAddress();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     function validationRequest(

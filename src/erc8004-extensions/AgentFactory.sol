@@ -3,6 +3,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "../erc8004-interfaces/IERC8004Identity.sol";
 import "./MultiEndpointRegistry.sol";
 
@@ -11,10 +13,18 @@ import "./MultiEndpointRegistry.sol";
  * @dev Factory for creating AI Agents with predefined templates
  * @notice Production-ready agent factory with template management
  */
-contract AgentFactory is Ownable {
-    IERC8004Identity public immutable identityRegistry;
+contract AgentFactory is Ownable, IERC721Receiver {
+    IERC8004Identity public identityRegistry;
     MultiEndpointRegistry public immutable endpointRegistry;
-    
+
+    /**
+     * @notice 底层注册表是否为 canonical 标准实现（官方单例）。
+     *         · legacy   —— `register` 为 payable、1-based、可能含注册费 → 按调用方传值转发；
+     *         · canonical —— `register` 为**非 payable**、无注册费、0-based → **不得带值**。
+     *         构造 / `setIdentityRegistry` 时自动探测（试调 legacy 专有 `getCurrentAgentId()`）。
+     */
+    bool public canonicalMode;
+
     uint256 private _templateCounter; // 修复：使用原生计数器替代Counters
     
     struct AgentTemplate {
@@ -53,11 +63,15 @@ contract AgentFactory is Ownable {
         string agentURI
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error AgentFactory__InvalidTemplate();
     error AgentFactory__TemplateNotActive();
     error AgentFactory__InvalidInput();
     error AgentFactory__CreationFailed();
+    /// @notice canonical 的 `register` 非 payable，调用方不应带值
+    error AgentFactory__UnexpectedValue();
 
     constructor(address _identityRegistry, address _endpointRegistry) Ownable(msg.sender) {
         if (_identityRegistry == address(0) || _endpointRegistry == address(0)) {
@@ -65,7 +79,52 @@ contract AgentFactory is Ownable {
         }
         identityRegistry = IERC8004Identity(_identityRegistry);
         endpointRegistry = MultiEndpointRegistry(_endpointRegistry);
+        canonicalMode = _detectCanonical(_identityRegistry);
         _templateCounter = 0; // 初始化计数器
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有旧版 / 官方 canonical 单例）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续；
+    ///      切换后重新探测 canonical 模式，写入路径随之调整（是否可带值）
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert AgentFactory__InvalidInput();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        canonicalMode = _detectCanonical(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
+    }
+
+    /// @dev legacy 暴露 `getCurrentAgentId()`；canonical 单例无此函数 → staticcall 失败即 canonical。
+    function _detectCanonical(address registry) private view returns (bool) {
+        (bool ok, ) = registry.staticcall(abi.encodeWithSignature("getCurrentAgentId()"));
+        return !ok;
+    }
+
+    /// @dev 按底层实现转发注册：legacy 可带值（注册费）；canonical 非 payable → 带值即拒绝。
+    function _registerAgent(string memory agentURI, uint256 value) private returns (uint256 agentId) {
+        if (canonicalMode) {
+            if (value != 0) revert AgentFactory__UnexpectedValue();
+            agentId = identityRegistry.register(agentURI);
+        } else {
+            agentId = identityRegistry.register{value: value}(agentURI);
+        }
+    }
+
+    /// @dev 接住 `register()` 经 `_safeMint` 铸给本工厂的 agent NFT；随后在创建流程中转交调用方。
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+
+    /// @dev 接收 legacy 注册表退还的多余注册费（其 refund 以 msg.sender=工厂 为收款人）
+    receive() external payable {}
+
+    /// @dev 把本次调用产生的净剩余（多付的注册费）退回调用方，避免资金滞留工厂
+    function _refundSurplus(uint256 balBefore) private {
+        uint256 surplus = address(this).balance - balBefore;
+        if (surplus != 0) {
+            (bool ok, ) = payable(msg.sender).call{value: surplus}("");
+            require(ok, "refund failed");
+        }
     }
     
     /**
@@ -137,8 +196,10 @@ contract AgentFactory is Ownable {
             revert AgentFactory__TemplateNotActive();
         }
         
-        // 创建agent
-        agentId = identityRegistry.register{value: msg.value}(template.baseURI);
+        uint256 balBefore = address(this).balance - msg.value;
+
+        // 创建agent（legacy 转发注册费；canonical 非 payable，不得带值）
+        agentId = _registerAgent(template.baseURI, msg.value);
         
         // 修复：使用正确的 createEndpoint 方法创建端点
         for (uint256 i = 0; i < template.endpointTypes.length; i++) {
@@ -156,6 +217,11 @@ contract AgentFactory is Ownable {
         _agentTemplates[agentId].push(templateId);
         
         emit AgentCreated(agentId, templateId, msg.sender, template.baseURI);
+
+        // 建端点时工厂须为 owner；完成后把 agent NFT 转交调用方 —— agent 归创建者
+        IERC721(address(identityRegistry)).transferFrom(address(this), msg.sender, agentId);
+
+        _refundSurplus(balBefore);
         return agentId;
     }
     
@@ -180,10 +246,12 @@ contract AgentFactory is Ownable {
             revert AgentFactory__TemplateNotActive();
         }
         
+        uint256 balBefore = address(this).balance - msg.value;
+
         agentIds = new uint256[](count);
         
         for (uint256 i = 0; i < count; i++) {
-            agentIds[i] = identityRegistry.register{value: msg.value / count}(template.baseURI);
+            agentIds[i] = _registerAgent(template.baseURI, msg.value / count);
             
             // 修复：使用正确的 createEndpoint 方法创建端点
             for (uint256 j = 0; j < template.endpointTypes.length; j++) {
@@ -201,8 +269,12 @@ contract AgentFactory is Ownable {
             _agentTemplates[agentIds[i]].push(templateId);
             
             emit AgentCreated(agentIds[i], templateId, msg.sender, template.baseURI);
+
+            // 建端点时工厂须为 owner；完成后把 agent NFT 转交调用方
+            IERC721(address(identityRegistry)).transferFrom(address(this), msg.sender, agentIds[i]);
         }
         
+        _refundSurplus(balBefore);
         return agentIds;
     }
     

@@ -20,8 +20,8 @@ import "./TokenPriceOracle.sol";
 contract PaymentGateway is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
     
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     AgentWallet public immutable agentWallet;
     ERC8004SubscriptionManager public immutable subscriptionManager;
     TokenPriceOracle public priceOracle;
@@ -221,6 +221,8 @@ contract PaymentGateway is Ownable, ReentrancyGuard {
         address token
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error PaymentGateway__InvalidAgent();
     error PaymentGateway__InvalidAmount();
@@ -263,6 +265,16 @@ contract PaymentGateway is Ownable, ReentrancyGuard {
         priceOracle = TokenPriceOracle(_priceOracle);
         platformFeeCollector = _feeCollector;
         platformFeePercentage = 0; // 0% platform fee initially
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert PaymentGateway__InvalidAgent();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**

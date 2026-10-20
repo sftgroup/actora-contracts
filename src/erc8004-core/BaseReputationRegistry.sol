@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./IdentityRegistry.sol";
+import "../erc8004-interfaces/IERC8004Identity.sol";
 
 /**
  * @title BaseReputationRegistry
@@ -14,7 +15,7 @@ import "./IdentityRegistry.sol";
 abstract contract BaseReputationRegistry is Ownable {
     using ECDSA for bytes32;
     
-    ERC8004IdentityRegistry public immutable identityRegistry;
+    IERC8004Identity public identityRegistry;
     
     struct Feedback {
         uint8 score;
@@ -43,6 +44,8 @@ abstract contract BaseReputationRegistry is Ownable {
     mapping(bytes32 => bool) public usedSignatures;
     mapping(bytes32 => bool) public usedAuthorizationKeys;
 
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+
     // Fix: Use custom error to avoid duplicate declaration
     error BaseReputation__InvalidIdentityRegistry();
 
@@ -50,7 +53,16 @@ abstract contract BaseReputationRegistry is Ownable {
         if (_identityRegistry == address(0)) {
             revert BaseReputation__InvalidIdentityRegistry();
         }
-        identityRegistry = ERC8004IdentityRegistry(_identityRegistry);
+        identityRegistry = IERC8004Identity(_identityRegistry);
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert BaseReputation__InvalidIdentityRegistry();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     // Internal functions for storage access

@@ -19,8 +19,8 @@ import "./TokenPriceOracle.sol";
 contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.UintSet;
     
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     AgentWallet public immutable agentWallet;
     TokenPriceOracle public priceOracle;
     
@@ -83,6 +83,19 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         address paymentToken;
     }
     
+    /// @notice M3：存量子订阅的导入载荷
+    /// @dev agentId / planType / paymentToken 由 `_subscriptionPlans[planId]` 派生，不接受调用方指定
+    struct ImportedSubscription {
+        uint256 planId;
+        address subscriber;
+        SubscriptionStatus status;
+        uint256 startDate;
+        uint256 nextBillingDate;
+        uint256 endDate;
+        uint256 totalPaid;
+        uint256 autoRenewal;
+    }
+    
     // Storage
     uint256 private _planCounter;
     uint256 private _subscriptionCounter;
@@ -108,6 +121,9 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     uint256 public defaultPlatformFee = 0; // 0% initially, in basis points (100 = 1%)
     address public platformFeeCollector;
     uint256 public autoRenewalBuffer = 1 days;
+    
+    /// @notice M3：存量订阅是否已完成一次性导入（导入后不可再调用）
+    bool public subscriptionsImported;
     
     // Events
     event PlanCreated(
@@ -206,6 +222,10 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         uint256 updatedAt
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
+    event SubscriptionsImported(uint256 count);
+    
     // Custom errors
     error SubscriptionManager__InvalidAgent();
     error SubscriptionManager__InvalidPlan();
@@ -224,6 +244,8 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     error SubscriptionManager__AutoRenewalFailed();
     error SubscriptionManager__InvalidPaymentMethod();
     error SubscriptionManager__InvalidToken();
+    error SubscriptionManager__InvalidSubscriber();
+    error SubscriptionManager__AlreadyImported();
 
     constructor(
         address _identityRegistry,
@@ -244,6 +266,16 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         priceOracle = TokenPriceOracle(_priceOracle);
         platformFeeCollector = _feeCollector;
         defaultPlatformFee = 0; // 0% platform fee initially
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert SubscriptionManager__InvalidAgent();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**
@@ -450,6 +482,83 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         );
         
         return subscriptionId;
+    }
+    
+    /**
+     * @dev M3：一次性导入存量订阅（按剩余时长与状态原样落库，不触发付款）
+     *      仅 owner 可调用且仅可执行一次；agentId / planType / paymentToken 由计划派生。
+     *      UsageBased / Hybrid 计划的 remainingUsage 取计划 totalUsageLimit。
+     */
+    function importSubscriptions(ImportedSubscription[] calldata items)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 imported)
+    {
+        if (subscriptionsImported) {
+            revert SubscriptionManager__AlreadyImported();
+        }
+        
+        for (uint256 i = 0; i < items.length; i++) {
+            ImportedSubscription calldata item = items[i];
+            SubscriptionPlan memory plan = _subscriptionPlans[item.planId];
+            
+            if (plan.planId == 0) {
+                revert SubscriptionManager__InvalidPlan();
+            }
+            if (item.subscriber == address(0)) {
+                revert SubscriptionManager__InvalidSubscriber();
+            }
+            
+            uint256 subscriptionId = ++_subscriptionCounter;
+            uint256 remainingUsage = 0;
+            if (plan.planType == PlanType.UsageBased || plan.planType == PlanType.Hybrid) {
+                remainingUsage = plan.totalUsageLimit;
+            }
+            
+            _subscriptions[subscriptionId] = Subscription({
+                subscriptionId: subscriptionId,
+                planId: item.planId,
+                agentId: plan.agentId,
+                subscriber: item.subscriber,
+                status: item.status,
+                planType: plan.planType,
+                startDate: item.startDate,
+                nextBillingDate: item.nextBillingDate,
+                endDate: item.endDate,
+                currentPeriodUsage: 0,
+                totalUsage: 0,
+                remainingUsage: remainingUsage,
+                totalPaid: item.totalPaid,
+                autoRenewal: item.autoRenewal,
+                createdAt: item.startDate,
+                lastPaymentDate: item.startDate,
+                paymentToken: plan.token
+            });
+            
+            _agentSubscriptions[plan.agentId].add(subscriptionId);
+            _userSubscriptions[item.subscriber].add(subscriptionId);
+            _planSubscriptions[item.planId].add(subscriptionId);
+            if (item.status == SubscriptionStatus.Active) {
+                _activeSubscriptionIds.add(subscriptionId);
+            }
+            
+            emit SubscriptionCreated(
+                subscriptionId,
+                item.planId,
+                plan.agentId,
+                item.subscriber,
+                plan.planType,
+                item.startDate,
+                item.nextBillingDate,
+                item.autoRenewal
+            );
+            
+            imported++;
+        }
+        
+        subscriptionsImported = true;
+        emit SubscriptionsImported(imported);
     }
     
     /**

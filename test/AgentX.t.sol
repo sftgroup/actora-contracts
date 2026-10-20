@@ -72,7 +72,7 @@ contract AgentXTest is Test {
         assertEq(subscriptions.platformFeeBps(), 250);
         subscriptions.setPlatformFee(500);
         assertEq(subscriptions.platformFeeBps(), 500);
-        vm.expectRevert("Max 20%");
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionManager.FeeTooHigh.selector, 2000));
         subscriptions.setPlatformFee(3000);
     }
 
@@ -107,7 +107,7 @@ contract AgentXTest is Test {
 
     function test_CreatePlan_UnwhitelistedToken() public {
         vm.prank(creator);
-        vm.expectRevert("Token not whitelisted");
+        vm.expectRevert(SubscriptionManager.TokenNotWhitelisted.selector);
         subscriptions.createPlan(1, 100, "month", makeAddr("fake"), 0);
     }
 
@@ -258,7 +258,7 @@ contract AgentXTest is Test {
         uint256 planId = subscriptions.createPlan(1, 0.1 ether, "month", address(0), 0);
         vm.deal(subscriber, 0.05 ether);
         vm.prank(subscriber);
-        vm.expectRevert("Insufficient ETH");
+        vm.expectRevert(SubscriptionManager.InsufficientEth.selector);
         subscriptions.subscribe{value: 0.05 ether}(planId);
     }
 

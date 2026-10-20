@@ -14,7 +14,7 @@ import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegi
  * @title DeployBase
  * @notice Deploy all 6 core AgentX contracts to Base
  *         Chain ID 8453 (mainnet). EIP-1559 supported, so no --legacy flag
- *         needed (unlike OxaChain's Clique PoA).
+ *         needed.
  *
  *         Deployment order (dependency-aware, same as DeployBsc):
  *           1. IdentityRegistry          — no deps

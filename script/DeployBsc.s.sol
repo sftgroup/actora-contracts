@@ -14,9 +14,9 @@ import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegi
  * @title DeployBsc
  * @notice Deploy all 6 core AgentX contracts to BNB Smart Chain (BSC)
  *         Chain ID 56 (mainnet), 97 (testnet). EIP-1559 supported, so no
- *         --legacy flag needed (unlike OxaChain's Clique PoA).
+ *         --legacy flag needed.
  *
- *         Deployment order (dependency-aware, same as DeployOxaChainFull):
+ *         Deployment order (dependency-aware):
  *           1. IdentityRegistry          — no deps
  *           2. ReputationRegistry        — depends on IdentityRegistry
  *           3. ConfigurationRegistry     — depends on IdentityRegistry

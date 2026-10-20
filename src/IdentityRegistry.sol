@@ -11,6 +11,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *                   新功能应迁移到 erc8004-core/IdentityRegistry.sol，
  *                   该版本实现了完整的 IERC8004Identity 接口并支持
  *                   注册费、分页查询、burn 等能力。
+ * @custom:frozen 本合约已冻结（WS1）。仅接受必要的安全修复，禁止新增/变更
+ *               外部接口（ABI）。任何 ABI 变更会被 CI 门禁 tools/frozen-abi.sh
+ *               拦截；如需改动，须同步更新 .frozen-abi/ 快照并说明理由。
+ *               读存量身份请通过 ERC8004IdentityAdapter，不迁移链上数据。
  * @notice ERC-721 Agent NFT registry for AgentX platform.
  *         每个 Agent 作为 NFT 铸造，支持可扩展键值元数据。
  *         兼容 agentx-sdk AgentRegistry 的 ABI。

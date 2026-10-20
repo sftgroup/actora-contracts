@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../erc8004-interfaces/IERC8004Identity.sol";
 
 /**
@@ -12,8 +13,10 @@ import "../erc8004-interfaces/IERC8004Identity.sol";
  * @notice Implements A2A protocol features including Agent Cards, skills, and task orchestration
  */
 contract A2AProtocolRegistry is Ownable {
-    IERC8004Identity public immutable identityRegistry;
-    IERC721 public immutable erc721Identity;
+    using EnumerableSet for EnumerableSet.UintSet;
+    
+    IERC8004Identity public identityRegistry;
+    IERC721 public erc721Identity;
     
     // 修复：手动实现计数器
     uint256 private _agentCardCounter;
@@ -82,6 +85,8 @@ contract A2AProtocolRegistry is Ownable {
     mapping(uint256 => A2ASkill) private _a2aSkills;
     mapping(uint256 => mapping(uint256 => AgentSkill)) private _agentSkills;
     mapping(uint256 => uint256[]) private _agentSkillIds;
+    // skillId => 注册了该技能的 agentId 集合（WS4：去除对 getCurrentAgentId 的依赖，legacy/canonical 通用）
+    mapping(uint256 => EnumerableSet.UintSet) private _skillAgentIds;
     mapping(uint256 => A2ATask) private _a2aTasks;
     mapping(uint256 => uint256[]) private _agentTasks;
     mapping(address => uint256[]) private _userTasks;
@@ -131,6 +136,8 @@ contract A2AProtocolRegistry is Ownable {
         uint256 completedAt
     );
     
+    event IdentityRegistryUpdated(address indexed previous, address indexed current);
+    
     // Custom errors
     error A2AProtocol__AgentNotOwner();
     error A2AProtocol__AgentCardNotFound();
@@ -153,6 +160,16 @@ contract A2AProtocolRegistry is Ownable {
         _taskCounter = 1;
         
         _initializeDefaultSkills();
+    }
+    
+    /// @notice WS4：切换本合约指向的 ERC-8004 identity 注册表（自有 core 或官方部署）
+    /// @dev 仅 owner 可调用；不迁移既有数据，切换前须确保 agentId 语义连续
+    function setIdentityRegistry(address newIdentityRegistry) external onlyOwner {
+        if (newIdentityRegistry == address(0)) revert A2AProtocol__InvalidInput();
+        address previous = address(identityRegistry);
+        identityRegistry = IERC8004Identity(newIdentityRegistry);
+        erc721Identity = IERC721(newIdentityRegistry);
+        emit IdentityRegistryUpdated(previous, newIdentityRegistry);
     }
     
     /**
@@ -310,6 +327,7 @@ contract A2AProtocolRegistry is Ownable {
         
         _agentSkills[agentId][skillId] = agentSkill;
         _agentSkillIds[agentId].push(skillId);
+        _skillAgentIds[skillId].add(agentId);
         
         emit AgentSkillAdded(agentId, skillId, skillEndpoint, version);
     }
@@ -467,30 +485,12 @@ contract A2AProtocolRegistry is Ownable {
 
     /**
      * @dev Search agents by skill
+     * @notice WS4：不再依赖 `identityRegistry.getCurrentAgentId()`（官方 canonical 单例无
+     *         链上枚举视图，调用会 revert）。改为读取 `addAgentSkill` 维护的 per-skill
+     *         agentId 集合，legacy / canonical 两种身份注册表下均可工作。
      */
     function searchAgentsBySkill(uint256 skillId) external view returns (uint256[] memory agentIds) {
-        uint256 totalAgents = identityRegistry.getCurrentAgentId();
-        uint256 count = 0;
-        
-        for (uint256 i = 1; i <= totalAgents; i++) {
-            AgentSkill storage agentSkill = _agentSkills[i][skillId];
-            if (agentSkill.isActive) {
-                count++;
-            }
-        }
-        
-        agentIds = new uint256[](count);
-        uint256 index = 0;
-        
-        for (uint256 i = 1; i <= totalAgents; i++) {
-            AgentSkill storage agentSkill = _agentSkills[i][skillId];
-            if (agentSkill.isActive) {
-                agentIds[index] = i;
-                index++;
-            }
-        }
-        
-        return agentIds;
+        return _skillAgentIds[skillId].values();
     }
     
     /**

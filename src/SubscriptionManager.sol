@@ -11,6 +11,9 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @custom:deprecated 该独立版 SubscriptionManager 将被弃用。
  *                   新部署应使用 erc8004-extensions/SubscriptionManager.sol，
  *                   它提供更丰富的功能: 订阅计划、按用量计费、自动续订等。
+ * @custom:frozen 本合约已冻结（WS1）。仅接受必要的安全修复，禁止新增/变更
+ *               外部接口（ABI）。任何 ABI 变更会被 CI 门禁 tools/frozen-abi.sh
+ *               拦截；如需改动，须同步更新 .frozen-abi/ 快照并说明理由。
  * @notice On-chain subscription lifecycle for AgentX.
  *
  *         特性:

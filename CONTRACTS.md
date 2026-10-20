@@ -1,6 +1,6 @@
 # AgentX Contracts — Deployment & Reference
 
-> Last updated: 2026-07-21 (full L1 6-contract suite)
+> Last updated: 2026-07-21 (full L1 6-contract suite) ｜ 费率说明对齐：2026-10-04
 
 ---
 
@@ -21,7 +21,9 @@
 
 > Sources verified on Sepolia Blockscout. All 8 contracts open-source.
 
-### OxaChain L1 (Mainnet) — Core Only
+### OxaChain L1 (19505) — 已下线（2026-10-20）
+
+> OxaChain 已从平台移除，下列地址仅作历史记录，**不再使用**。现行市场链为 BSC / Ethereum / Base，完整地址表见 [`DEPLOYMENT.md §4.2`](../DEPLOYMENT.md)。
 
 | Contract | Version | Address | Owner |
 |----------|---------|---------|-------|
@@ -38,15 +40,19 @@
 
 | Chain | Chain ID | RPC |
 |-------|----------|-----|
+| BSC（默认） | 56 | `https://bsc-rpc.publicnode.com` |
+| Ethereum | 1 | `https://ethereum-rpc.publicnode.com` |
+| Base | 8453 | `https://base-rpc.publicnode.com` |
 | Sepolia | 11155111 | `https://ethereum-sepolia-rpc.publicnode.com` |
-| OxaChain L1 | 19505 | `https://rpc-oxa.0xainet.top` |
 
 ### Deployers
 
 | Chain | Address |
 |-------|---------|
+| BSC | `0x8017925F7eEcA3713F03983113788321891F7D1f` |
+| Ethereum | `0xBDc6E9a23705D6De23e324A6b4a386dDB254F287` |
+| Base | `0x978e92477ff613c307e25Bf0ed1D50E9483782C4` |
 | Sepolia | `0x4F7744F97AaC9Ad7f0a67de75b149aDb87464103` |
-| OxaChain L1 | `0x8E869A0624fF9e766Df71b5B08897d00E4d260ba` |
 
 ---
 
@@ -56,12 +62,26 @@
 
 | Parameter | Value |
 |-----------|-------|
-| Constructor arg | `500` (platformFeeBps = 5%) |
+| Constructor arg（历史，非现行费率） | `500`（部署时命令记录，见下方「费率说明」） |
 | Compiler | solc 0.8.24 |
 | EvmVersion | cancun |
 | Optimizer | on, 200 runs |
 | Tx Hash | `0x3dbf09f83e7064b5f53dc7f279049be5c13ffe69e602de6550887d3718830537` |
 | Command | `forge create --legacy --constructor-args 500` |
+
+### 费率说明（平台费率 · 单一来源，2026-10-04 对齐）
+
+> **现行平台费率 = `250` bps = 2.5%（creator 97.5% / 平台 2.5%）。** 以链上 `platformFeeBps()` 读数为**唯一真值**。
+
+| 事项 | 值 | 依据 |
+|---|---|---|
+| **现行费率** | **250 bps（2.5%）** | 历史锚点：OxaChain L1 SM 链上验证 = `250`（该链已于 2026-10-20 下线，记录见 `memory/2026-07-14.md`）；`script/Deploy.s.sol` 默认 `INITIAL_PLATFORM_FEE_BPS = 250`；业务口径见 `docs/payment-architecture.md`（「生产 = 250 bps = 2.5%」）与 `sdk/src/config/config.ts` |
+| 部署时构造参数（历史） | 本文件下方记录为 `500` | 旧 v3 部署命令 `--constructor-args 500`；部署后可由 owner 经 `setPlatformFee()` 调整 |
+| 生产链 BSC / ETH / Base | 目标 250 bps（2.5%） | ⚠️ **待链上核验**：读 `platformFeeBps()` on `0x6f18Aa…`(BSC) / `0x7b4002…`(ETH) / `0x0f129e…`(Base)（地址见 `DEPLOYMENT.md §4.2`） |
+| 允许范围 | 0–2000 bps（0–20%） | `setPlatformFee` 约束 |
+
+- **结论**：历史 `500` 行**不代表现行费率**，保留仅作部署溯源；**对外材料、计费、SDK 一律用 2.5%**。
+- 生产链完整地址表（含 BSC/ETH/Base）见 [`DEPLOYMENT.md §4.2`](../DEPLOYMENT.md)。
 
 ### V3 Audit Fixes (from v2 at `0x04CACa...`)
 
@@ -80,7 +100,7 @@
 
 | Parameter | Value |
 |-----------|-------|
-| Constructor arg | `500` (platformFeeBps = 5%) |
+| Constructor arg（历史，非现行费率） | `500`（部署时命令记录，见下方「费率说明」） |
 | Compiler | solc 0.8.24 |
 | EvmVersion | cancun |
 | Optimizer | on, 200 runs |
