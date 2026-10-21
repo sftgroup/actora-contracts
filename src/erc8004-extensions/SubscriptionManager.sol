@@ -83,6 +83,24 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         address paymentToken;
     }
     
+    /// @notice P1.7：存量计划的导入载荷
+    /// @dev planId 由合约自增分配；planType / 价格 / 周期等字段原样落库
+    struct ImportedPlan {
+        uint256 agentId;
+        string name;
+        string description;
+        PlanType planType;
+        address token;
+        uint256 subscriptionPrice;
+        uint256 usagePrice;
+        BillingPeriod billingPeriod;
+        uint256 maxUsage;
+        uint256 totalUsageLimit;
+        bool isActive;
+        uint256 createdAt;
+        uint256 platformFeePercentage;
+    }
+    
     /// @notice M3：存量子订阅的导入载荷
     /// @dev agentId / planType / paymentToken 由 `_subscriptionPlans[planId]` 派生，不接受调用方指定
     struct ImportedSubscription {
@@ -124,6 +142,9 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     
     /// @notice M3：存量订阅是否已完成一次性导入（导入后不可再调用）
     bool public subscriptionsImported;
+    
+    /// @notice P1.7：存量计划是否已完成一次性导入（导入后不可再调用）
+    bool public plansImported;
     
     // Events
     event PlanCreated(
@@ -225,6 +246,8 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     event IdentityRegistryUpdated(address indexed previous, address indexed current);
     
     event SubscriptionsImported(uint256 count);
+    
+    event PlansImported(uint256 count);
     
     // Custom errors
     error SubscriptionManager__InvalidAgent();
@@ -364,6 +387,90 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             defaultPlatformFee
         );
         return planId;
+    }
+    
+    /**
+     * @dev P1.7：一次性导入存量计划（平台非 agent owner，无法代发 createPlan）
+     *      仅 owner 可调用且仅可执行一次；planId 自增分配，其余字段原样落库。
+     */
+    function importPlans(ImportedPlan[] calldata items)
+        external
+        onlyOwner
+        nonReentrant
+        returns (uint256 imported)
+    {
+        if (plansImported) {
+            revert SubscriptionManager__AlreadyImported();
+        }
+        
+        for (uint256 i = 0; i < items.length; i++) {
+            ImportedPlan calldata item = items[i];
+            
+            // agentId 必须存在（迁移后为 canonical id）
+            try erc721Identity.ownerOf(item.agentId) returns (address) {} catch {
+                revert SubscriptionManager__InvalidAgent();
+            }
+            
+            if (bytes(item.name).length == 0) {
+                revert SubscriptionManager__InvalidAmount();
+            }
+            if (item.platformFeePercentage > 10000) {
+                revert SubscriptionManager__InvalidAmount();
+            }
+            
+            // 与 createPlan 相同的计划类型/价格校验
+            if (item.planType == PlanType.Subscription) {
+                if (item.subscriptionPrice == 0) revert SubscriptionManager__InvalidAmount();
+            } else if (item.planType == PlanType.UsageBased) {
+                if (item.usagePrice == 0) revert SubscriptionManager__InvalidAmount();
+            } else {
+                if (item.subscriptionPrice == 0 || item.usagePrice == 0) {
+                    revert SubscriptionManager__InvalidAmount();
+                }
+            }
+            
+            if (item.token != address(0) && !priceOracle.isTokenSupported(item.token)) {
+                revert SubscriptionManager__InvalidToken();
+            }
+            
+            uint256 planId = ++_planCounter;
+            
+            _subscriptionPlans[planId] = SubscriptionPlan({
+                planId: planId,
+                agentId: item.agentId,
+                name: item.name,
+                description: item.description,
+                planType: item.planType,
+                token: item.token,
+                subscriptionPrice: item.subscriptionPrice,
+                usagePrice: item.usagePrice,
+                billingPeriod: item.billingPeriod,
+                maxUsage: item.maxUsage,
+                totalUsageLimit: item.totalUsageLimit,
+                isActive: item.isActive,
+                createdAt: item.createdAt == 0 ? block.timestamp : item.createdAt,
+                platformFeePercentage: item.platformFeePercentage
+            });
+            
+            _agentPlans[item.agentId].add(planId);
+            
+            emit PlanCreated(
+                planId,
+                item.agentId,
+                item.name,
+                item.planType,
+                item.token,
+                item.subscriptionPrice,
+                item.usagePrice,
+                item.billingPeriod,
+                item.platformFeePercentage
+            );
+            
+            imported++;
+        }
+        
+        plansImported = true;
+        emit PlansImported(imported);
     }
     
     /**

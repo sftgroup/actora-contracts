@@ -59,7 +59,8 @@ interface ICanonicalReputationRegistry {
  *  2. 数据源 = WS2 统一后的 infraX settlement（经 ISettlementVerifier 注入式核对，PC-4）；
  *     核对规则 = ① 验签恢复 == payer；② 结算记录存在；③ 逐字段一致；④ settlementRef 幂等。
  *  3. 幂等锚点 = settlementRef（同一笔结算只计一次）。
- *  4. 权重 = 确定性纯函数（金额封顶 × 时间衰减 × 反女巫）；**参数 immutable（发布即冻结）**，公式公开供第三方复算。
+ *  4. 权重 = 确定性纯函数（金额封顶 × 时间衰减 × 反女巫）；参数**版本化 append-only**，
+ *     每笔结算固定其落库时的参数版本，调参不追溯历史，公式公开供第三方复算。
  */
 contract PaymentReputationOracle is Ownable, EIP712 {
     using ECDSA for bytes32;
@@ -90,14 +91,22 @@ contract PaymentReputationOracle is Ownable, EIP712 {
     ISettlementVerifier public settlementVerifier;
     ICanonicalReputationRegistry public reputationRegistry;
 
-    // ── 权重参数（immutable：发布即冻结，第三方可复算）──
-    uint256 public immutable amountCap; // 单笔计入上限（防刷单）
-    uint256 public immutable maxAge;    // 时间衰减窗口：超过则权重为 0
-    uint256 public immutable payerCap;  // 同一 payer 对该 agent 的免罚笔数（超出降权）
-
+    // ── 权重参数（版本化：地址与公式不变，参数 append-only）──
+    /// @notice 一个参数版本；effectiveAt 仅作审计标记，新版本立即生效。
+    struct ParamSet {
+        uint256 amountCap;  // 单笔计入上限（防刷单）
+        uint256 maxAge;     // 时间衰减窗口：超过则权重为 0
+        uint256 payerCap;   // 同一 payer 对该 agent 的免罚笔数（超出降权）
+        uint64 effectiveAt;
+    }
+    
+    mapping(uint256 => ParamSet) public paramSets;
+    uint256 public currentParamVersion;
+    
     // ── 存储 ──
     mapping(bytes32 => SettlementProof) private _proofs;
     mapping(bytes32 => bool) private _used;
+    mapping(bytes32 => uint256) private _proofParamVersion; // settlementRef → 落库时的参数版本
     mapping(uint256 => bytes32[]) private _agentSettlementRefs;
     mapping(uint256 => mapping(address => uint256)) private _payerCounts;
 
@@ -115,6 +124,13 @@ contract PaymentReputationOracle is Ownable, EIP712 {
     event ReputationMirrored(uint256 indexed agentId, int128 value, uint8 valueDecimals, uint256 weight, uint256 settledCount);
     event SettlementVerifierUpdated(address indexed previous, address indexed current);
     event ReputationRegistryUpdated(address indexed previous, address indexed current);
+    event ParamVersionAdded(
+        uint256 indexed version,
+        uint256 amountCap,
+        uint256 maxAge,
+        uint256 payerCap,
+        uint64 effectiveAt
+    );
 
     // ── 错误 ──
     error Oracle__ZeroAddress();
@@ -127,14 +143,23 @@ contract PaymentReputationOracle is Ownable, EIP712 {
     error Oracle__VerifierNotConfigured();
     error Oracle__RegistryNotConfigured();
     error Oracle__ValueOverflow();
+    error Oracle__InvalidParams();
 
     constructor(uint256 initialAmountCap, uint256 initialMaxAge, uint256 initialPayerCap)
         Ownable(msg.sender)
         EIP712("ActoraPaymentSettlement", "1")
     {
-        amountCap = initialAmountCap;
-        maxAge = initialMaxAge;
-        payerCap = initialPayerCap;
+        if (initialAmountCap == 0 || initialMaxAge == 0 || initialPayerCap == 0) {
+            revert Oracle__InvalidParams();
+        }
+        currentParamVersion = 1;
+        paramSets[1] = ParamSet({
+            amountCap: initialAmountCap,
+            maxAge: initialMaxAge,
+            payerCap: initialPayerCap,
+            effectiveAt: uint64(block.timestamp)
+        });
+        emit ParamVersionAdded(1, initialAmountCap, initialMaxAge, initialPayerCap, uint64(block.timestamp));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -170,9 +195,10 @@ contract PaymentReputationOracle is Ownable, EIP712 {
                 || keccak256(bytes(rec.rail)) != keccak256(bytes(proof.rail))
         ) revert Oracle__SettlementMismatch();
 
-        // ③ 幂等落库
+        // ③ 幂等落库（同时固定该笔使用的参数版本，后续调参不影响历史）
         _used[proof.settlementRef] = true;
         _proofs[proof.settlementRef] = proof;
+        _proofParamVersion[proof.settlementRef] = currentParamVersion;
         _agentSettlementRefs[proof.agentId].push(proof.settlementRef);
         _payerCounts[proof.agentId][proof.payer] += 1;
 
@@ -213,26 +239,55 @@ contract PaymentReputationOracle is Ownable, EIP712 {
 
     /// @notice 单笔贡献（确定性纯函数，公开可复算）：
     ///         c = f(amount) · decay(Δt) · s(payer)，各因子归一化到 WAD。
+    ///         参数取该笔落库时固定的版本，调参不追溯历史。
     function contributionOf(bytes32 settlementRef) public view returns (uint256) {
         SettlementProof storage p = _proofs[settlementRef];
         if (!_used[settlementRef]) return 0;
+        
+        ParamSet storage params = paramSets[_proofParamVersion[settlementRef]];
+        uint256 cap = params.amountCap;
+        uint256 window = params.maxAge;
+        uint256 freeCount = params.payerCap;
 
         // f：单笔金额封顶后归一化（防刷单）
-        uint256 amt = p.amount > amountCap ? amountCap : p.amount;
-        uint256 amountFactor = amountCap == 0 ? 0 : (amt * WAD) / amountCap;
+        uint256 amt = p.amount > cap ? cap : p.amount;
+        uint256 amountFactor = (amt * WAD) / cap;
 
         // decay：线性衰减至 maxAge 归零
         uint256 age = block.timestamp > p.settledAt ? block.timestamp - p.settledAt : 0;
-        uint256 timeFactor = age >= maxAge ? 0 : (WAD * (maxAge - age)) / maxAge;
+        uint256 timeFactor = age >= window ? 0 : (WAD * (window - age)) / window;
 
         // s：同一 payer 超出 payerCap 后按 1/(1+excess) 降权
         uint256 count = _payerCounts[p.agentId][p.payer];
-        uint256 excess = count > payerCap ? count - payerCap : 0;
-        uint256 sybilFactor = (WAD * payerCap) / (payerCap + excess);
+        uint256 excess = count > freeCount ? count - freeCount : 0;
+        uint256 sybilFactor = (WAD * freeCount) / (freeCount + excess);
 
         uint256 c = (amountFactor * timeFactor) / WAD;
         c = (c * sybilFactor) / WAD;
         return c;
+    }
+    
+    /// @notice 当前生效参数（便于前端/复算脚本读取，避免两次调用之间版本切换）。
+    function currentParams() external view returns (ParamSet memory) {
+        return paramSets[currentParamVersion];
+    }
+    
+    /// @notice 任意历史版本的参数（旧版本永久可查，供第三方复算）。
+    function paramSetOf(uint256 version) external view returns (ParamSet memory) {
+        return paramSets[version];
+    }
+    
+    /// @notice 兼容旧读取面：返回当前版本的三个参数。
+    function amountCap() external view returns (uint256) {
+        return paramSets[currentParamVersion].amountCap;
+    }
+    
+    function maxAge() external view returns (uint256) {
+        return paramSets[currentParamVersion].maxAge;
+    }
+    
+    function payerCap() external view returns (uint256) {
+        return paramSets[currentParamVersion].payerCap;
     }
 
     function getSettlement(bytes32 settlementRef) external view returns (SettlementProof memory) {
@@ -254,7 +309,7 @@ contract PaymentReputationOracle is Ownable, EIP712 {
 
     /**
      * @notice 将聚合权重镜像写入 canonical（valueDecimals=0，tag1="payment-settlement"）。
-     *         第三方仍可凭链上证明 + 公开公式复算出同一权重。
+     *         第三方可凭链上证明 + 该笔的参数版本 + 公开公式复算出同一权重。
      */
     function mirrorToRegistry(uint256 agentId) external {
         ICanonicalReputationRegistry registry = reputationRegistry;
@@ -272,9 +327,33 @@ contract PaymentReputationOracle is Ownable, EIP712 {
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  管理（权重参数 immutable，不可改；仅数据源可换）
+    //  管理（参数版本化：只追加、不覆盖；数据源可换）
     // ─────────────────────────────────────────────────────────────
-
+    
+    /**
+     * @notice 追加一个新参数版本；此前已落库的结算继续使用其原版本参数。
+     * @dev 仅 owner；三个参数均须 > 0（避免除零）。新版本立即生效。
+     */
+    function newParamVersion(uint256 newAmountCap, uint256 newMaxAge, uint256 newPayerCap)
+        external
+        onlyOwner
+        returns (uint256 version)
+    {
+        if (newAmountCap == 0 || newMaxAge == 0 || newPayerCap == 0) {
+            revert Oracle__InvalidParams();
+        }
+        
+        version = ++currentParamVersion;
+        paramSets[version] = ParamSet({
+            amountCap: newAmountCap,
+            maxAge: newMaxAge,
+            payerCap: newPayerCap,
+            effectiveAt: uint64(block.timestamp)
+        });
+        
+        emit ParamVersionAdded(version, newAmountCap, newMaxAge, newPayerCap, uint64(block.timestamp));
+    }
+    
     function setSettlementVerifier(address newVerifier) external onlyOwner {
         address previous = address(settlementVerifier);
         settlementVerifier = ISettlementVerifier(newVerifier);

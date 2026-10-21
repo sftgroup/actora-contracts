@@ -80,6 +80,19 @@ contract A2AProtocolRegistry is Ownable {
         bytes32 taskHash;
     }
     
+    /// @notice P1.7：存量 agent-skill 关联的导入载荷
+    /// @dev skillId 必须已存在于技能字典；同一 (agentId, skillId) 重复导入时原地覆盖，不重复建索引
+    struct ImportedAgentSkill {
+        uint256 agentId;
+        uint256 skillId;
+        string skillEndpoint;
+        string version;
+        uint256 price;
+        address priceToken;
+        bool isActive;
+        uint256 registeredAt;
+    }
+    
     // Storage
     mapping(uint256 => AgentCard) private _agentCards;
     mapping(uint256 => A2ASkill) private _a2aSkills;
@@ -90,6 +103,9 @@ contract A2AProtocolRegistry is Ownable {
     mapping(uint256 => A2ATask) private _a2aTasks;
     mapping(uint256 => uint256[]) private _agentTasks;
     mapping(address => uint256[]) private _userTasks;
+    
+    /// @notice P1.7：存量 agent-skill 是否已完成一次性导入（导入后不可再调用）
+    bool public agentSkillsImported;
     
     // Events
     event AgentCardCreated(
@@ -138,6 +154,8 @@ contract A2AProtocolRegistry is Ownable {
     
     event IdentityRegistryUpdated(address indexed previous, address indexed current);
     
+    event AgentSkillsImported(uint256 count);
+    
     // Custom errors
     error A2AProtocol__AgentNotOwner();
     error A2AProtocol__AgentCardNotFound();
@@ -146,6 +164,7 @@ contract A2AProtocolRegistry is Ownable {
     error A2AProtocol__InvalidInput();
     error A2AProtocol__TaskNotActive();
     error A2AProtocol__Unauthorized();
+    error A2AProtocol__AlreadyImported();
 
     constructor(address _identityRegistry) Ownable(msg.sender) {
         if (_identityRegistry == address(0)) {
@@ -330,6 +349,62 @@ contract A2AProtocolRegistry is Ownable {
         _skillAgentIds[skillId].add(agentId);
         
         emit AgentSkillAdded(agentId, skillId, skillEndpoint, version);
+    }
+    
+    /**
+     * @dev P1.7：一次性导入存量 agent-skill 关联（平台非 agent owner，无法代发 addAgentSkill）
+     *      仅 owner 可调用且仅可执行一次；索引按 (agentId, skillId) 去重。
+     */
+    function importSkills(ImportedAgentSkill[] calldata items)
+        external
+        onlyOwner
+        returns (uint256 imported)
+    {
+        if (agentSkillsImported) {
+            revert A2AProtocol__AlreadyImported();
+        }
+        
+        for (uint256 i = 0; i < items.length; i++) {
+            ImportedAgentSkill calldata item = items[i];
+            
+            // agentId 必须存在（迁移后为 canonical id）
+            try erc721Identity.ownerOf(item.agentId) returns (address) {} catch {
+                revert A2AProtocol__InvalidInput();
+            }
+            
+            A2ASkill storage skill = _a2aSkills[item.skillId];
+            if (!skill.isActive) {
+                revert A2AProtocol__SkillNotFound();
+            }
+            if (bytes(item.skillEndpoint).length == 0) {
+                revert A2AProtocol__InvalidInput();
+            }
+            
+            bool isNew = _agentSkills[item.agentId][item.skillId].skillId == 0;
+            
+            _agentSkills[item.agentId][item.skillId] = AgentSkill({
+                agentId: item.agentId,
+                skillId: item.skillId,
+                skillEndpoint: item.skillEndpoint,
+                version: item.version,
+                price: item.price,
+                priceToken: item.priceToken,
+                isActive: item.isActive,
+                registeredAt: item.registeredAt == 0 ? block.timestamp : item.registeredAt
+            });
+            
+            if (isNew) {
+                _agentSkillIds[item.agentId].push(item.skillId);
+            }
+            _skillAgentIds[item.skillId].add(item.agentId);
+            
+            emit AgentSkillAdded(item.agentId, item.skillId, item.skillEndpoint, item.version);
+            
+            imported++;
+        }
+        
+        agentSkillsImported = true;
+        emit AgentSkillsImported(imported);
     }
     
     /**

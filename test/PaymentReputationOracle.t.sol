@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {
     PaymentReputationOracle,
     ISettlementVerifier,
@@ -132,12 +133,74 @@ contract PaymentReputationOracleTest is Test {
         oracle.submitSettlement(p, _sign(p));
     }
 
-    // ── 配置：immutable 参数 ──
+    // ── 配置：版本化参数 ──
 
-    function test_Constructor_SetsImmutableParams() public {
+    function test_Constructor_ExposesCurrentParams() public {
         assertEq(oracle.amountCap(), AMOUNT_CAP);
         assertEq(oracle.maxAge(), MAX_AGE);
         assertEq(oracle.payerCap(), PAYER_CAP);
+    }
+
+    function test_Constructor_InitializesVersion1() public {
+        assertEq(oracle.currentParamVersion(), 1);
+
+        PaymentReputationOracle.ParamSet memory params = oracle.currentParams();
+        assertEq(params.amountCap, AMOUNT_CAP);
+        assertEq(params.maxAge, MAX_AGE);
+        assertEq(params.payerCap, PAYER_CAP);
+        assertEq(params.effectiveAt, uint64(block.timestamp));
+    }
+
+    function test_Constructor_ZeroParam_Reverts() public {
+        vm.expectRevert(PaymentReputationOracle.Oracle__InvalidParams.selector);
+        new PaymentReputationOracle(0, MAX_AGE, PAYER_CAP);
+    }
+
+    function test_NewParamVersion_AppendsAndActivates() public {
+        uint256 version = oracle.newParamVersion(50e18, 90 days, 1);
+
+        assertEq(version, 2);
+        assertEq(oracle.currentParamVersion(), 2);
+        assertEq(oracle.amountCap(), 50e18);
+        assertEq(oracle.maxAge(), 90 days);
+        assertEq(oracle.payerCap(), 1);
+
+        // 旧版本参数永久可查
+        PaymentReputationOracle.ParamSet memory v1 = oracle.paramSetOf(1);
+        assertEq(v1.amountCap, AMOUNT_CAP);
+        assertEq(v1.maxAge, MAX_AGE);
+        assertEq(v1.payerCap, PAYER_CAP);
+    }
+
+    function test_NewParamVersion_OnlyOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert(
+            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger)
+        );
+        oracle.newParamVersion(50e18, 90 days, 1);
+    }
+
+    function test_NewParamVersion_ZeroParam_Reverts() public {
+        vm.expectRevert(PaymentReputationOracle.Oracle__InvalidParams.selector);
+        oracle.newParamVersion(50e18, 0, 1);
+    }
+
+    function test_NewParamVersion_DoesNotRewriteHistory() public {
+        uint64 t = uint64(block.timestamp);
+        bytes32 oldRef = keccak256("v1-proof");
+        _submit(1, 10e18, t, oldRef);
+        uint256 oldWeight = oracle.contributionOf(oldRef);
+        assertEq(oldWeight, 0.1e18); // 10e18 / cap(100e18)
+
+        oracle.newParamVersion(1e18, 1 days, 1);
+
+        // 历史结算仍按 v1 参数计算
+        assertEq(oracle.contributionOf(oldRef), oldWeight);
+
+        // 新结算按 v2 参数计算：金额封顶 1e18 → f=1，agent 2 首笔 → s=1
+        bytes32 newRef = keccak256("v2-proof");
+        _submit(2, 10e18, t, newRef);
+        assertEq(oracle.contributionOf(newRef), 1e18);
     }
 
     // ── 写入：正常路径 ──

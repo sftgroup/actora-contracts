@@ -41,11 +41,28 @@ contract MultiEndpointRegistry is Ownable {
         string[] requiredParams;
     }
     
+    /// @notice P1.7：存量 endpoint 的导入载荷
+    /// @dev endpointId 由合约自增分配；createdBy 保留原始创建者（0 则记为 msg.sender）
+    struct ImportedEndpoint {
+        uint256 agentId;
+        string name;
+        string endpointType;
+        string protocol;
+        string url;
+        string description;
+        bool isActive;
+        uint256 createdAt;
+        address createdBy;
+    }
+    
     // Storage
     mapping(uint256 => Endpoint) private _endpoints;
     mapping(uint256 => uint256[]) private _agentEndpoints;
     mapping(string => ProtocolConfig) private _protocolConfigs;
     string[] private _supportedProtocols;
+    
+    /// @notice P1.7：存量 endpoint 是否已完成一次性导入（导入后不可再调用）
+    bool public endpointsImported;
     
     // Events
     event EndpointCreated(
@@ -76,6 +93,8 @@ contract MultiEndpointRegistry is Ownable {
     
     event IdentityRegistryUpdated(address indexed previous, address indexed current);
     
+    event EndpointsImported(uint256 count);
+    
     // Custom errors
     error MultiEndpoint__AgentNotOwner();
     error MultiEndpoint__EndpointNotFound();
@@ -83,6 +102,7 @@ contract MultiEndpointRegistry is Ownable {
     error MultiEndpoint__MaxEndpointsReached();
     error MultiEndpoint__InvalidInput();
     error MultiEndpoint__Unauthorized();
+    error MultiEndpoint__AlreadyImported();
 
     constructor(address _identityRegistry) Ownable(msg.sender) {
         if (_identityRegistry == address(0)) {
@@ -166,6 +186,68 @@ contract MultiEndpointRegistry is Ownable {
         
         emit EndpointCreated(endpointId, agentId, endpointType, protocol, url);
         return endpointId;
+    }
+    
+    /**
+     * @dev P1.7：一次性导入存量 endpoint（平台非 agent owner，无法代发 createEndpoint）
+     *      仅 owner 可调用且仅可执行一次；endpointId 自增分配，其余字段原样落库。
+     */
+    function importEndpoints(ImportedEndpoint[] calldata items)
+        external
+        onlyOwner
+        returns (uint256 imported)
+    {
+        if (endpointsImported) {
+            revert MultiEndpoint__AlreadyImported();
+        }
+        
+        for (uint256 i = 0; i < items.length; i++) {
+            ImportedEndpoint calldata item = items[i];
+            
+            // agentId 必须存在（迁移后为 canonical id）
+            try erc721Identity.ownerOf(item.agentId) returns (address) {} catch {
+                revert MultiEndpoint__InvalidInput();
+            }
+            
+            ProtocolConfig storage config = _protocolConfigs[item.protocol];
+            if (!config.isSupported) {
+                revert MultiEndpoint__ProtocolNotSupported();
+            }
+            
+            uint256[] storage agentEndpoints = _agentEndpoints[item.agentId];
+            if (agentEndpoints.length >= config.maxEndpointsPerAgent) {
+                revert MultiEndpoint__MaxEndpointsReached();
+            }
+            
+            if (bytes(item.name).length == 0 || bytes(item.url).length == 0) {
+                revert MultiEndpoint__InvalidInput();
+            }
+            
+            uint256 endpointId = _endpointCounter;
+            _endpointCounter++;
+            
+            _endpoints[endpointId] = Endpoint({
+                endpointId: endpointId,
+                agentId: item.agentId,
+                name: item.name,
+                endpointType: item.endpointType,
+                protocol: item.protocol,
+                url: item.url,
+                description: item.description,
+                isActive: item.isActive,
+                createdAt: item.createdAt == 0 ? block.timestamp : item.createdAt,
+                updatedAt: item.createdAt == 0 ? block.timestamp : item.createdAt,
+                createdBy: item.createdBy == address(0) ? msg.sender : item.createdBy
+            });
+            agentEndpoints.push(endpointId);
+            
+            emit EndpointCreated(endpointId, item.agentId, item.endpointType, item.protocol, item.url);
+            
+            imported++;
+        }
+        
+        endpointsImported = true;
+        emit EndpointsImported(imported);
     }
     
     /**
