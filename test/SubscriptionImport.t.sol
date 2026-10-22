@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "../src/erc8004-extensions/SubscriptionManager.sol";
-import "../src/erc8004-extensions/AgentWallet.sol";
 import "../src/erc8004-extensions/TokenPriceOracle.sol";
 
 contract MockSubscriptionIdentity is ERC721 {
@@ -32,11 +31,9 @@ contract SubscriptionImportTest is Test {
         identity = new MockSubscriptionIdentity();
         identity.mint(agentOwner, 1);
 
-        AgentWallet wallet = new AgentWallet(address(identity));
         TokenPriceOracle oracle = new TokenPriceOracle();
         manager = new ERC8004SubscriptionManager(
             address(identity),
-            address(wallet),
             address(oracle),
             feeCollector
         );
@@ -58,8 +55,7 @@ contract SubscriptionImportTest is Test {
 
     function _item(
         address who,
-        ERC8004SubscriptionManager.SubscriptionStatus status,
-        uint256 autoRenewal
+        ERC8004SubscriptionManager.SubscriptionStatus status
     ) private pure returns (ERC8004SubscriptionManager.ImportedSubscription memory) {
         return ERC8004SubscriptionManager.ImportedSubscription({
             planId: PLAN_ID,
@@ -68,15 +64,14 @@ contract SubscriptionImportTest is Test {
             startDate: START,
             nextBillingDate: NEXT_BILLING,
             endDate: END,
-            totalPaid: 30 ether,
-            autoRenewal: autoRenewal
+            totalPaid: 30 ether
         });
     }
 
     function test_Import_PreservesFields() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 2);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
 
         uint256 imported = manager.importSubscriptions(items);
 
@@ -95,7 +90,6 @@ contract SubscriptionImportTest is Test {
         assertEq(s.nextBillingDate, NEXT_BILLING);
         assertEq(s.endDate, END);
         assertEq(s.totalPaid, 30 ether);
-        assertEq(s.autoRenewal, 2);
         assertEq(s.createdAt, START);
         assertEq(s.lastPaymentDate, START);
         assertEq(s.paymentToken, address(0));
@@ -119,7 +113,7 @@ contract SubscriptionImportTest is Test {
 
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
         items[0].planId = usagePlanId;
 
         manager.importSubscriptions(items);
@@ -132,8 +126,8 @@ contract SubscriptionImportTest is Test {
     function test_Import_Indexes() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](2);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
-        items[1] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Cancelled, 1);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
+        items[1] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Cancelled);
 
         manager.importSubscriptions(items);
 
@@ -146,9 +140,9 @@ contract SubscriptionImportTest is Test {
     function test_Import_OnlyActiveEntersActiveSet() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](3);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
-        items[1] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Cancelled, 0);
-        items[2] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Expired, 0);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
+        items[1] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Cancelled);
+        items[2] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Expired);
 
         manager.importSubscriptions(items);
 
@@ -160,7 +154,7 @@ contract SubscriptionImportTest is Test {
     function test_Import_EmitsEvents() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 1);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
 
         vm.expectEmit(true, true, true, true, address(manager));
         emit ERC8004SubscriptionManager.SubscriptionCreated(
@@ -170,8 +164,7 @@ contract SubscriptionImportTest is Test {
             subscriber,
             ERC8004SubscriptionManager.PlanType.Subscription,
             START,
-            NEXT_BILLING,
-            1
+            NEXT_BILLING
         );
         vm.expectEmit(true, true, true, true, address(manager));
         emit ERC8004SubscriptionManager.SubscriptionsImported(1);
@@ -182,7 +175,7 @@ contract SubscriptionImportTest is Test {
     function test_RevertWhen_CalledTwice() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
 
         manager.importSubscriptions(items);
 
@@ -193,7 +186,7 @@ contract SubscriptionImportTest is Test {
     function test_RevertWhen_NotOwner() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
 
         vm.prank(subscriber);
         vm.expectRevert(
@@ -208,7 +201,7 @@ contract SubscriptionImportTest is Test {
     function test_RevertWhen_UnknownPlan() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
+        items[0] = _item(subscriber, ERC8004SubscriptionManager.SubscriptionStatus.Active);
         items[0].planId = 999;
 
         vm.expectRevert(ERC8004SubscriptionManager.SubscriptionManager__InvalidPlan.selector);
@@ -218,7 +211,7 @@ contract SubscriptionImportTest is Test {
     function test_RevertWhen_ZeroSubscriber() public {
         ERC8004SubscriptionManager.ImportedSubscription[]
             memory items = new ERC8004SubscriptionManager.ImportedSubscription[](1);
-        items[0] = _item(address(0), ERC8004SubscriptionManager.SubscriptionStatus.Active, 0);
+        items[0] = _item(address(0), ERC8004SubscriptionManager.SubscriptionStatus.Active);
 
         vm.expectRevert(ERC8004SubscriptionManager.SubscriptionManager__InvalidSubscriber.selector);
         manager.importSubscriptions(items);

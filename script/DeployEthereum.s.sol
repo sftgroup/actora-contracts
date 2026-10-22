@@ -12,6 +12,10 @@ import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegi
 
 /**
  * @title DeployEthereum
+ * @notice ⚠️ DEPRECATED（2026-10-22）：生产链请改用 `DeployCanonicalExtensions.s.sol`。
+ *         本脚本会 `new IdentityRegistry()`，部署出自建 legacy 身份层，与官方 canonical 单例不兼容。
+ *         仅保留用于历史复现 / 独立测试链。
+ *
  * @notice Deploy all 6 core AgentX contracts to Ethereum Mainnet
  *         Chain ID 1 (mainnet). EIP-1559 supported, so no --legacy flag
  *         needed.

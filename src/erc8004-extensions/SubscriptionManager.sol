@@ -8,20 +8,21 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../erc8004-interfaces/IERC8004Identity.sol";
-import "./AgentWallet.sol";
 import "./TokenPriceOracle.sol";
 
 /**
  * @title SubscriptionManager
  * @dev Enhanced subscription management for AI Agent services with recurring and usage-based payments
- * @notice Production-ready subscription system with flexible billing and auto-renewal
+ * @notice Production-ready subscription system with flexible billing
+ *
+ *         订阅续费由外部编排（网关 AA session key 重新调用 `subscribe(planId)`）；
+ *         本合约不持有用户余额、不做代扣，因此不依赖 AgentWallet。
  */
 contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.UintSet;
     
     IERC8004Identity public identityRegistry;
     IERC721 public erc721Identity;
-    AgentWallet public immutable agentWallet;
     TokenPriceOracle public priceOracle;
     
     enum SubscriptionStatus {
@@ -77,7 +78,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         uint256 totalUsage;
         uint256 remainingUsage; // For usage-based plans
         uint256 totalPaid;
-        uint256 autoRenewal; // 0 = manual, 1 = auto from wallet, 2 = auto from deposit
         uint256 createdAt;
         uint256 lastPaymentDate;
         address paymentToken;
@@ -111,7 +111,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         uint256 nextBillingDate;
         uint256 endDate;
         uint256 totalPaid;
-        uint256 autoRenewal;
     }
     
     // Storage
@@ -135,10 +134,8 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     
     // Configuration
     uint256 public gracePeriod = 3 days;
-    uint256 public maxAutoRenewals = 12;
     uint256 public defaultPlatformFee = 0; // 0% initially, in basis points (100 = 1%)
     address public platformFeeCollector;
-    uint256 public autoRenewalBuffer = 1 days;
     
     /// @notice M3：存量订阅是否已完成一次性导入（导入后不可再调用）
     bool public subscriptionsImported;
@@ -182,8 +179,7 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         address subscriber,
         PlanType planType,
         uint256 startDate,
-        uint256 nextBillingDate,
-        uint256 autoRenewal
+        uint256 nextBillingDate
     );
     
     event SubscriptionRenewed(
@@ -222,19 +218,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         uint256 recordedAt
     );
     
-    event AutoRenewalEnabled(
-        uint256 indexed subscriptionId,
-        address subscriber,
-        uint256 autoRenewalType,
-        uint256 enabledAt
-    );
-    
-    event AutoRenewalDisabled(
-        uint256 indexed subscriptionId,
-        address subscriber,
-        uint256 disabledAt
-    );
-    
     event PlatformFeeUpdated(
         uint256 indexed agentId,
         uint256 oldFee,
@@ -261,10 +244,8 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     error SubscriptionManager__UsageLimitExceeded();
     error SubscriptionManager__PlanHasActiveSubscriptions();
     error SubscriptionManager__InvalidPagination();
-    error SubscriptionManager__AutoRenewalNotEnabled();
     error SubscriptionManager__InvalidPlanType();
     error SubscriptionManager__InsufficientUsage();
-    error SubscriptionManager__AutoRenewalFailed();
     error SubscriptionManager__InvalidPaymentMethod();
     error SubscriptionManager__InvalidToken();
     error SubscriptionManager__InvalidSubscriber();
@@ -272,12 +253,10 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
 
     constructor(
         address _identityRegistry,
-        address _agentWallet,
         address _priceOracle,
         address _feeCollector
     ) Ownable(msg.sender) {
         if (_identityRegistry == address(0) || 
-            _agentWallet == address(0) || 
             _priceOracle == address(0) || 
             _feeCollector == address(0)) {
             revert SubscriptionManager__InvalidAgent();
@@ -285,7 +264,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         
         identityRegistry = IERC8004Identity(_identityRegistry);
         erc721Identity = IERC721(_identityRegistry);
-        agentWallet = AgentWallet(_agentWallet);
         priceOracle = TokenPriceOracle(_priceOracle);
         platformFeeCollector = _feeCollector;
         defaultPlatformFee = 0; // 0% platform fee initially
@@ -476,10 +454,7 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     /**
      * @dev Subscribe to a plan (with initial payment)
      */
-    function subscribe(
-        uint256 planId,
-        uint256 autoRenewal // 0 = manual, 1 = auto from wallet, 2 = auto from deposit
-    ) external payable nonReentrant returns (uint256 subscriptionId) {
+    function subscribe(uint256 planId) external payable nonReentrant returns (uint256 subscriptionId) {
         SubscriptionPlan memory plan = _subscriptionPlans[planId];
         
         if (plan.planId == 0) {
@@ -533,7 +508,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             totalUsage: 0,
             remainingUsage: remainingUsage,
             totalPaid: 0,
-            autoRenewal: autoRenewal,
             createdAt: block.timestamp,
             lastPaymentDate: block.timestamp,
             paymentToken: plan.token
@@ -562,19 +536,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
                 msgValue,  // Fix: Use local variable instead of directly using msg.value
                 "Initial subscription payment"
             );
-            
-            // If auto-renewal is enabled, set up authorization
-            if (autoRenewal > 0) {
-                if (autoRenewal == 1) {
-                    // Auto-renew from wallet - user must have already authorized
-                    // We don't need to do anything here, just record the setting
-                } else if (autoRenewal == 2) {
-                    // Auto-renew from deposit - ensure user has sufficient deposit
-                    // This will be checked during renewal
-                }
-                
-                emit AutoRenewalEnabled(subscriptionId, msg.sender, autoRenewal, block.timestamp);
-            }
         }
         
         emit SubscriptionCreated(
@@ -584,8 +545,7 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             msg.sender,
             plan.planType,
             block.timestamp,
-            nextBillingDate,
-            autoRenewal
+            nextBillingDate
         );
         
         return subscriptionId;
@@ -637,7 +597,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
                 totalUsage: 0,
                 remainingUsage: remainingUsage,
                 totalPaid: item.totalPaid,
-                autoRenewal: item.autoRenewal,
                 createdAt: item.startDate,
                 lastPaymentDate: item.startDate,
                 paymentToken: plan.token
@@ -657,8 +616,7 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
                 item.subscriber,
                 plan.planType,
                 item.startDate,
-                item.nextBillingDate,
-                item.autoRenewal
+                item.nextBillingDate
             );
             
             imported++;
@@ -674,7 +632,7 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     function recordUsage(
         uint256 subscriptionId,
         uint256 usage,
-        string memory description
+        string memory /*description*/
     ) external nonReentrant {
         Subscription storage subscription = _subscriptions[subscriptionId];
         
@@ -714,28 +672,9 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             revert SubscriptionManager__InsufficientUsage();
         }
         
-        // Calculate payment for usage
+        // 用量计费：本合约不再做代扣，按次结算由 x402 / 链下账单完成；
+        // 这里只更新链上用量与额度，供订阅状态与前台展示使用。
         uint256 usageAmount = usage * plan.usagePrice;
-        
-        // Process payment for usage
-        if (usageAmount > 0) {
-            // Try to process payment automatically from wallet
-            bool paymentSuccess = _processAutoPayment(
-                subscription.subscriber,
-                subscriptionId,
-                usageAmount,
-                plan.token,
-                string(abi.encodePacked("Usage payment: ", description))
-            );
-            
-            if (!paymentSuccess) {
-                subscription.status = SubscriptionStatus.PaymentFailed;
-                revert SubscriptionManager__PaymentFailed();
-            }
-            
-            subscription.totalPaid += usageAmount;
-            subscription.lastPaymentDate = block.timestamp;
-        }
         
         // Update usage
         subscription.currentPeriodUsage += usage;
@@ -761,202 +700,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             usageAmount,
             block.timestamp
         );
-    }
-    
-    /**
-     * @dev Process subscription renewal (manual or auto)
-     */
-    function processRenewal(uint256 subscriptionId) external payable nonReentrant { // Fix: Add payable
-        Subscription storage subscription = _subscriptions[subscriptionId];
-        
-        if (subscription.subscriptionId == 0) {
-            revert SubscriptionManager__SubscriptionNotFound();
-        }
-        
-        if (subscription.status != SubscriptionStatus.Active) {
-            revert SubscriptionManager__InvalidStatus();
-        }
-        
-        if (subscription.planType != PlanType.Subscription && subscription.planType != PlanType.Hybrid) {
-            revert SubscriptionManager__InvalidPlanType();
-        }
-        
-        if (block.timestamp < subscription.nextBillingDate) {
-            revert SubscriptionManager__InvalidStatus();
-        }
-        
-        SubscriptionPlan memory plan = _subscriptionPlans[subscription.planId];
-        
-        // Reset period usage
-        subscription.currentPeriodUsage = 0;
-        
-        // Check if auto-renewal is enabled
-        if (subscription.autoRenewal > 0) {
-            // Try auto-renewal
-            bool autoSuccess = _processAutoRenewal(subscriptionId);
-            
-            if (!autoSuccess) {
-                subscription.status = SubscriptionStatus.PaymentFailed;
-                revert SubscriptionManager__AutoRenewalFailed();
-            }
-        } else {
-            // Manual renewal - require payment
-            // This function should be called with payment in msg.value for native tokens
-            // or with ERC20 approval
-            // Fix: Store msg.value in a local variable to pass
-            uint256 msgValue = msg.value;
-            _processPayment(
-                subscriptionId,
-                plan.subscriptionPrice,
-                plan.token,
-                msgValue,  // Fix: Use local variable instead of directly using msg.value
-                "Manual subscription renewal"
-            );
-        }
-        
-        // Update next billing date
-        subscription.nextBillingDate = _calculateNextBillingDate(block.timestamp, plan.billingPeriod);
-        
-        emit SubscriptionRenewed(
-            subscriptionId,
-            subscription.planId,
-            subscription.subscriber,
-            plan.subscriptionPrice,
-            subscription.nextBillingDate
-        );
-    }
-    
-    /**
-     * @dev Enable auto-renewal for a subscription
-     */
-    function enableAutoRenewal(uint256 subscriptionId, uint256 autoRenewalType) external {
-        Subscription storage subscription = _subscriptions[subscriptionId];
-        
-        if (subscription.subscriptionId == 0) {
-            revert SubscriptionManager__SubscriptionNotFound();
-        }
-        
-        if (subscription.subscriber != msg.sender) {
-            revert SubscriptionManager__NotAuthorized();
-        }
-        
-        if (subscription.status != SubscriptionStatus.Active) {
-            revert SubscriptionManager__InvalidStatus();
-        }
-        
-        if (autoRenewalType != 1 && autoRenewalType != 2) {
-            revert SubscriptionManager__InvalidPaymentMethod();
-        }
-        
-        subscription.autoRenewal = autoRenewalType;
-        
-        emit AutoRenewalEnabled(subscriptionId, msg.sender, autoRenewalType, block.timestamp);
-    }
-    
-    /**
-     * @dev Disable auto-renewal for a subscription
-     */
-    function disableAutoRenewal(uint256 subscriptionId) external {
-        Subscription storage subscription = _subscriptions[subscriptionId];
-        
-        if (subscription.subscriptionId == 0) {
-            revert SubscriptionManager__SubscriptionNotFound();
-        }
-        
-        if (subscription.subscriber != msg.sender) {
-            revert SubscriptionManager__NotAuthorized();
-        }
-        
-        subscription.autoRenewal = 0;
-        
-        emit AutoRenewalDisabled(subscriptionId, msg.sender, block.timestamp);
-    }
-    
-    /**
-     * @dev Internal function to process auto-renewal
-     */
-    function _processAutoRenewal(uint256 subscriptionId) internal returns (bool) {
-        Subscription storage subscription = _subscriptions[subscriptionId];
-        SubscriptionPlan memory plan = _subscriptionPlans[subscription.planId];
-        
-        if (subscription.autoRenewal == 1) {
-            // Auto-renew from wallet
-            return _processAutoPayment(
-                subscription.subscriber,
-                subscriptionId,
-                plan.subscriptionPrice,
-                plan.token,
-                "Auto-renewal payment"
-            );
-        } else if (subscription.autoRenewal == 2) {
-            // Auto-renew from deposit - check agentWallet for user deposit
-            // This requires the subscription manager to have authorization
-            // For now, we'll treat it same as wallet auto-renewal
-            return _processAutoPayment(
-                subscription.subscriber,
-                subscriptionId,
-                plan.subscriptionPrice,
-                plan.token,
-                "Auto-renewal from deposit"
-            );
-        }
-        
-        return false;
-    }
-    
-    /**
-     * @dev Internal function to process payment automatically from wallet
-     */
-    function _processAutoPayment(
-        address user,
-        uint256 subscriptionId,
-        uint256 amount,
-        address token,
-        string memory description
-    ) internal returns (bool) {
-        // Check if agentWallet is authorized to debit from user's wallet
-        bool isAuthorized = agentWallet.isSpenderAuthorized(user, address(this));
-        
-        if (!isAuthorized) {
-            return false;
-        }
-        
-        // Try to process payment through agentWallet
-        try agentWallet.processPaymentFromUser(user, token, amount, description) returns (bool success) {
-            if (success) {
-                // Record payment and update revenue
-                Subscription storage subscription = _subscriptions[subscriptionId];
-                SubscriptionPlan memory plan = _subscriptionPlans[subscription.planId];
-                
-                uint256 platformFee = (amount * plan.platformFeePercentage) / 10000;
-                uint256 agentAmount = amount - platformFee;
-                
-                subscription.totalPaid += amount;
-                subscription.lastPaymentDate = block.timestamp;
-                
-                // Update revenue tracking
-                _agentTotalRevenue[subscription.agentId] += agentAmount;
-                _agentPlatformRevenue[subscription.agentId] += platformFee;
-                _platformTotalRevenue[subscription.agentId] += platformFee;
-                
-                emit PaymentProcessed(
-                    subscriptionId,
-                    subscription.planId,
-                    user,
-                    token,
-                    amount,
-                    platformFee,
-                    agentAmount,
-                    block.timestamp
-                );
-                
-                return true;
-            }
-        } catch {
-            return false;
-        }
-        
-        return false;
     }
     
     /**
@@ -1061,7 +804,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         
         subscription.status = SubscriptionStatus.Cancelled;
         subscription.endDate = block.timestamp;
-        subscription.autoRenewal = 0;
         
         _activeSubscriptionIds.remove(subscriptionId);
         

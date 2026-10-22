@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "../src/erc8004-extensions/SubscriptionManager.sol";
-import "../src/erc8004-extensions/AgentWallet.sol";
 import "../src/erc8004-extensions/TokenPriceOracle.sol";
 import "../src/erc8004-extensions/MultiEndpointRegistry.sol";
 import "../src/erc8004-extensions/A2AProtocolRegistry.sol";
@@ -36,11 +35,9 @@ contract ImportReplayTest is Test {
         identity = new MockIdentity();
         identity.mint(agentOwner, AGENT_ID);
 
-        AgentWallet wallet = new AgentWallet(address(identity));
         TokenPriceOracle oracle = new TokenPriceOracle();
         manager = new ERC8004SubscriptionManager(
             address(identity),
-            address(wallet),
             address(oracle),
             feeCollector
         );
