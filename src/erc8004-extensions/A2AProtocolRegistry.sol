@@ -415,7 +415,9 @@ contract A2AProtocolRegistry is Ownable {
         string memory taskType,
         string memory inputData
     ) external returns (uint256 taskId) {
-        if (!identityRegistry.agentExists(agentId)) {
+        // 官方 canonical 单例没有 `agentExists`；用 ownerOf 判定存在性
+        // （不存在的 tokenId 会 revert）。
+        try erc721Identity.ownerOf(agentId) returns (address) {} catch {
             revert A2AProtocol__InvalidInput();
         }
         

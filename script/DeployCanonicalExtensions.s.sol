@@ -28,19 +28,24 @@ import {AgentMigrator} from "../src/erc8004-extensions/AgentMigrator.sol";
  *           - Validation 按 2026-10-20 定案自部署 verbatim（BSC/Base 官方 0.0.1 不兼容）。
  *
  *         部署顺序（依赖感知）：
- *           1. TokenPriceOracle
- *           2. SubscriptionManager    (identity, priceOracle, feeCollector)
- *           3. A2AProtocolRegistry    (identity)
- *           4. ConfigurationRegistry  (identity)
- *           5. MultiEndpointRegistry  (identity)
- *           6. AgentFactory           (identity, multiEndpoint)
- *           7. ValidationRegistry     (verbatim, UUPS 代理, identity)
- *           8. AgentMigrator          (可选：legacy → canonical，需 LEGACY_IDENTITY)
+ *           1. TokenPriceOracle          （必发：SubscriptionManager 构造参数要求非零）
+ *           2. SubscriptionManager       (identity, priceOracle, feeCollector)
+ *           3. A2AProtocolRegistry       (identity)
+ *           4. ConfigurationRegistry     (identity)      ← DEPLOY_CONFIG=true
+ *           5. MultiEndpointRegistry     (identity)      ← DEPLOY_ENDPOINTS=true
+ *           6. AgentFactory              (identity, endpoints) ← DEPLOY_FACTORY=true（依赖 5）
+ *           7. ValidationRegistry        (verbatim, UUPS 代理) ← DEPLOY_VALIDATION=true
+ *           8. AgentMigrator             (可选：legacy → canonical，需 LEGACY_IDENTITY)
+ *
+ *         默认只发 1–3（最小上线集）：当前没有运行时消费者读
+ *         ConfigurationRegistry / MultiEndpointRegistry / AgentFactory
+ *         （端点写入方只有 factory，而 Studio 发布不走 factory）。
+ *         需要时按需打开对应开关：
+ *           DEPLOY_CONFIG / DEPLOY_ENDPOINTS / DEPLOY_FACTORY / DEPLOY_VALIDATION
  *
  *         用法（每链独立执行，顺序 ETH → Base → BSC）：
  *           PRIVATE_KEY=<pk> \
  *           FEE_COLLECTOR=<addr> \
- *           DEPLOY_VALIDATION=true \
  *           LEGACY_IDENTITY=<该链 legacy IdentityRegistry> \
  *           forge script script/DeployCanonicalExtensions.s.sol:DeployCanonicalExtensions \
  *             --rpc-url <RPC> --broadcast --verify --chain <ID>
@@ -48,10 +53,14 @@ import {AgentMigrator} from "../src/erc8004-extensions/AgentMigrator.sol";
  *         可选 env：
  *           CANONICAL_IDENTITY  默认 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432（三链同址）
  *           FEE_BPS             默认 250（2.5%），0 = 不改
- *           DEPLOY_VALIDATION   默认 true
+ *           DEPLOY_CONFIG       默认 false
+ *           DEPLOY_ENDPOINTS    默认 false
+ *           DEPLOY_FACTORY      默认 false（要求 DEPLOY_ENDPOINTS=true）
+ *           DEPLOY_VALIDATION   默认 false（P5 上线时置 true）
  *           LEGACY_IDENTITY     默认 0；为 0 时跳过 AgentMigrator
  *
  *         部署完成后把输出地址写入 gateway/.env（`*_<CHAIN>`）与 sdk KNOWN_CHAINS。
+ *         未部署的注册表在网关/SDK 侧必须保持零地址（不得继续指向 legacy）。
  */
 contract DeployCanonicalExtensions is Script {
     /// @dev 官方 canonical IdentityRegistry（BSC / Ethereum / Base 同址）
@@ -64,11 +73,15 @@ contract DeployCanonicalExtensions is Script {
         address canonical = vm.envOr("CANONICAL_IDENTITY", DEFAULT_CANONICAL_IDENTITY);
         address feeCollector = vm.envOr("FEE_COLLECTOR", deployer);
         uint256 feeBps = vm.envOr("FEE_BPS", uint256(250));
-        bool deployValidation = vm.envOr("DEPLOY_VALIDATION", true);
+        bool deployConfig = vm.envOr("DEPLOY_CONFIG", false);
+        bool deployEndpoints = vm.envOr("DEPLOY_ENDPOINTS", false);
+        bool deployFactory = vm.envOr("DEPLOY_FACTORY", false);
+        bool deployValidation = vm.envOr("DEPLOY_VALIDATION", false);
         address legacy = vm.envOr("LEGACY_IDENTITY", address(0));
 
         require(canonical.code.length > 0, "canonical identity has no code");
         require(feeCollector != address(0), "feeCollector is zero");
+        require(!deployFactory || deployEndpoints, "DEPLOY_FACTORY requires DEPLOY_ENDPOINTS");
 
         vm.startBroadcast(pk);
 
@@ -85,13 +98,22 @@ contract DeployCanonicalExtensions is Script {
             subscriptions.setDefaultPlatformFee(feeBps);
         }
 
-        // 3) A2A / 配置 / 端点
+        // 3) A2A（必发）/ 配置 / 端点（按开关）
         A2AProtocolRegistry a2a = new A2AProtocolRegistry(canonical);
-        ConfigurationRegistry config = new ConfigurationRegistry(canonical);
-        MultiEndpointRegistry endpoints = new MultiEndpointRegistry(canonical);
+        ConfigurationRegistry config;
+        if (deployConfig) {
+            config = new ConfigurationRegistry(canonical);
+        }
+        MultiEndpointRegistry endpoints;
+        if (deployEndpoints) {
+            endpoints = new MultiEndpointRegistry(canonical);
+        }
 
         // 4) Agent 工厂（依赖 identity + endpoint）
-        AgentFactory factory = new AgentFactory(canonical, address(endpoints));
+        AgentFactory factory;
+        if (deployFactory) {
+            factory = new AgentFactory(canonical, address(endpoints));
+        }
 
         // 5) Validation（verbatim canonical，UUPS 代理）
         ValidationRegistryUpgradeable validationImpl;
@@ -122,10 +144,16 @@ contract DeployCanonicalExtensions is Script {
         require(address(subscriptions.identityRegistry()) == canonical, "sm: identity");
         require(address(subscriptions.priceOracle()) == address(priceOracle), "sm: oracle");
         require(address(a2a.identityRegistry()) == canonical, "a2a: identity");
-        require(address(config.identityRegistry()) == canonical, "config: identity");
-        require(address(endpoints.identityRegistry()) == canonical, "endpoints: identity");
-        require(address(factory.identityRegistry()) == canonical, "factory: identity");
-        require(factory.canonicalMode(), "factory: canonical not detected");
+        if (deployConfig) {
+            require(address(config.identityRegistry()) == canonical, "config: identity");
+        }
+        if (deployEndpoints) {
+            require(address(endpoints.identityRegistry()) == canonical, "endpoints: identity");
+        }
+        if (deployFactory) {
+            require(address(factory.identityRegistry()) == canonical, "factory: identity");
+            require(factory.canonicalMode(), "factory: canonical not detected");
+        }
         if (deployValidation) {
             require(
                 ValidationRegistryUpgradeable(validation).getIdentityRegistry() == canonical,
@@ -149,9 +177,21 @@ contract DeployCanonicalExtensions is Script {
         console.log("  TokenPriceOracle:          ", address(priceOracle));
         console.log("  SubscriptionManager:       ", address(subscriptions));
         console.log("  A2AProtocolRegistry:       ", address(a2a));
-        console.log("  ConfigurationRegistry:     ", address(config));
-        console.log("  MultiEndpointRegistry:     ", address(endpoints));
-        console.log("  AgentFactory:              ", address(factory));
+        if (deployConfig) {
+            console.log("  ConfigurationRegistry:     ", address(config));
+        } else {
+            console.log("  ConfigurationRegistry:      skipped (DEPLOY_CONFIG=false)");
+        }
+        if (deployEndpoints) {
+            console.log("  MultiEndpointRegistry:     ", address(endpoints));
+        } else {
+            console.log("  MultiEndpointRegistry:      skipped (DEPLOY_ENDPOINTS=false)");
+        }
+        if (deployFactory) {
+            console.log("  AgentFactory:              ", address(factory));
+        } else {
+            console.log("  AgentFactory:               skipped (DEPLOY_FACTORY=false)");
+        }
         if (deployValidation) {
             console.log("  ValidationRegistry:        ", validation);
             console.log("    impl:", address(validationImpl));
@@ -168,8 +208,12 @@ contract DeployCanonicalExtensions is Script {
         console.log("  Env: IDENTITY_REGISTRY_<CHAIN>     =", canonical);
         console.log("  Env: SUBSCRIPTION_MANAGER_<CHAIN>  =", address(subscriptions));
         console.log("  Env: A2A_PROTOCOL_<CHAIN>          =", address(a2a));
-        console.log("  Env: CONFIGURATION_REGISTRY_<CHAIN>=", address(config));
-        console.log("  Env: MULTI_ENDPOINT_<CHAIN>        =", address(endpoints));
+        if (deployConfig) {
+            console.log("  Env: CONFIGURATION_REGISTRY_<CHAIN>=", address(config));
+        }
+        if (deployEndpoints) {
+            console.log("  Env: MULTI_ENDPOINT_<CHAIN>        =", address(endpoints));
+        }
         if (deployValidation) {
             console.log("  Env: VALIDATION_REGISTRY_<CHAIN>   =", validation);
         }

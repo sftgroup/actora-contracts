@@ -61,6 +61,25 @@ contract A2ASkillSearchTest is Test {
         assertEq(found[0], 0); // 0-based
     }
 
+    /// @dev createTask 的存在性校验改为 ownerOf：canonical 模拟（无 agentExists）可正常建任务
+    function test_Canonical_CreateTask_UsesOwnerOf() public {
+        canonical.mint(creator, 0);
+        A2AProtocolRegistry a2a = new A2AProtocolRegistry(address(canonical));
+
+        vm.prank(second);
+        uint256 taskId = a2a.createTask(0, "text", "hello");
+        assertEq(taskId, 1); // 计数器从 1 开始（0 视为「无任务」哨兵）
+    }
+
+    /// @dev 不存在的 agentId：ownerOf revert → InvalidInput（不再依赖 agentExists）
+    function test_Canonical_CreateTask_RevertsForUnknownAgent() public {
+        A2AProtocolRegistry a2a = new A2AProtocolRegistry(address(canonical));
+
+        vm.prank(second);
+        vm.expectRevert(A2AProtocolRegistry.A2AProtocol__InvalidInput.selector);
+        a2a.createTask(999, "text", "hello");
+    }
+
     function test_Canonical_SkillSearch_MultipleAgents() public {
         canonical.mint(creator, 0);
         canonical.mint(second, 1);
