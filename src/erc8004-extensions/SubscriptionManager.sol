@@ -465,21 +465,6 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
             revert SubscriptionManager__PlanNotActive();
         }
         
-        // Check if user already has an active subscription for this agent
-        bool hasActiveSubscription = false;
-        uint256[] memory userSubscriptions = _userSubscriptions[msg.sender].values();
-        for (uint256 i = 0; i < userSubscriptions.length; i++) {
-            Subscription memory existing = _subscriptions[userSubscriptions[i]];
-            if (existing.agentId == plan.agentId && 
-                existing.status == SubscriptionStatus.Active) {
-                hasActiveSubscription = true;
-                break;
-            }
-        }
-        
-        // Allow multiple subscriptions to same agent for different plans
-        // But not the same plan if active
-        
         _subscriptionCounter++;
         subscriptionId = _subscriptionCounter;
         
@@ -811,6 +796,61 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
     }
     
     /**
+     * @dev 手动续费：延长同一 subscriptionId 的到期时间（与旧版 `processPayment` 语义一致）。
+     *
+     *      - 仅订阅者本人可调用；
+     *      - 原生币计划必须精确支付 `subscriptionPrice`（多付/少付都会 revert）；
+     *      - ERC-20 计划需先对合约 approve，`msg.value` 必须为 0；
+     *      - 未到期时从原到期日顺延，已逾期则从当前时间起算。
+     *
+     *      网关的 AA 自动续费（`aa-renewal`）走的是「重新 subscribe 新订阅」，
+     *      本函数用于「我的订阅 → 续费」这类按 subscriptionId 续期的入口。
+     */
+    function processPayment(uint256 subscriptionId) external payable nonReentrant {
+        Subscription storage subscription = _subscriptions[subscriptionId];
+
+        if (subscription.subscriptionId == 0) {
+            revert SubscriptionManager__SubscriptionNotFound();
+        }
+        if (subscription.subscriber != msg.sender) {
+            revert SubscriptionManager__NotAuthorized();
+        }
+        if (subscription.status != SubscriptionStatus.Active) {
+            revert SubscriptionManager__InvalidStatus();
+        }
+
+        SubscriptionPlan memory plan = _subscriptionPlans[subscription.planId];
+        if (!plan.isActive) {
+            revert SubscriptionManager__PlanNotActive();
+        }
+        // 用量计费没有「续期」概念，按次付费走 recordUsage。
+        if (plan.planType == PlanType.UsageBased) {
+            revert SubscriptionManager__InvalidPlanType();
+        }
+
+        uint256 amount = plan.subscriptionPrice;
+        if (amount == 0) {
+            revert SubscriptionManager__InvalidAmount();
+        }
+
+        uint256 base = subscription.nextBillingDate > block.timestamp
+            ? subscription.nextBillingDate
+            : block.timestamp;
+
+        _processPayment(subscriptionId, amount, plan.token, msg.value, "Manual renewal");
+
+        subscription.nextBillingDate = _calculateNextBillingDate(base, plan.billingPeriod);
+
+        emit SubscriptionRenewed(
+            subscriptionId,
+            subscription.planId,
+            msg.sender,
+            amount,
+            subscription.nextBillingDate
+        );
+    }
+    
+    /**
      * @dev Update a subscription plan
      */
     function updatePlan(
@@ -993,6 +1033,35 @@ contract ERC8004SubscriptionManager is Ownable, ReentrancyGuard {
         }
         
         return true;
+    }
+    
+    /**
+     * @dev 旧版同签名查询（网关 chain-data-reader / SDK guard / MCP `subscription_check` 依赖）。
+     *      按 (subscriber, agentId) 判定是否存在仍然有效的订阅，语义与 `isSubscriptionActive` 对齐：
+     *      Active + 未超过宽限期 + （用量型）仍有剩余额度。
+     */
+    function hasActiveSubscription(address subscriber, uint256 agentId) external view returns (bool) {
+        uint256[] memory ids = _userSubscriptions[subscriber].values();
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            Subscription memory subscription = _subscriptions[ids[i]];
+            if (subscription.agentId != agentId) continue;
+            if (subscription.status != SubscriptionStatus.Active) continue;
+
+            if (subscription.planType != PlanType.UsageBased &&
+                block.timestamp > subscription.nextBillingDate + gracePeriod) {
+                continue;
+            }
+
+            if (subscription.planType == PlanType.UsageBased || subscription.planType == PlanType.Hybrid) {
+                SubscriptionPlan memory plan = _subscriptionPlans[subscription.planId];
+                if (plan.totalUsageLimit > 0 && subscription.remainingUsage == 0) continue;
+            }
+
+            return true;
+        }
+
+        return false;
     }
     
     /**
