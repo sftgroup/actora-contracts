@@ -14,8 +14,6 @@ import {ERC8004SubscriptionManager} from "../src/erc8004-extensions/Subscription
 import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry.sol";
 import {ConfigurationRegistry} from "../src/erc8004-extensions/ConfigurationRegistry.sol";
 import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegistry.sol";
-import {AgentFactory} from "../src/erc8004-extensions/AgentFactory.sol";
-import {AgentMigrator} from "../src/erc8004-extensions/AgentMigrator.sol";
 
 /**
  * @title DeployCanonicalExtensions
@@ -33,20 +31,16 @@ import {AgentMigrator} from "../src/erc8004-extensions/AgentMigrator.sol";
  *           3. A2AProtocolRegistry       (identity)
  *           4. ConfigurationRegistry     (identity)      ← DEPLOY_CONFIG=true
  *           5. MultiEndpointRegistry     (identity)      ← DEPLOY_ENDPOINTS=true
- *           6. AgentFactory              (identity, endpoints) ← DEPLOY_FACTORY=true（依赖 5）
- *           7. ValidationRegistry        (verbatim, UUPS 代理) ← DEPLOY_VALIDATION=true
- *           8. AgentMigrator             (可选：legacy → canonical，需 LEGACY_IDENTITY)
+ *           6. ValidationRegistry        (verbatim, UUPS 代理) ← DEPLOY_VALIDATION=true
  *
  *         默认只发 1–3（最小上线集）：当前没有运行时消费者读
- *         ConfigurationRegistry / MultiEndpointRegistry / AgentFactory
- *         （端点写入方只有 factory，而 Studio 发布不走 factory）。
+ *         ConfigurationRegistry / MultiEndpointRegistry。
  *         需要时按需打开对应开关：
- *           DEPLOY_CONFIG / DEPLOY_ENDPOINTS / DEPLOY_FACTORY / DEPLOY_VALIDATION
+ *           DEPLOY_CONFIG / DEPLOY_ENDPOINTS / DEPLOY_VALIDATION
  *
  *         用法（每链独立执行，顺序 ETH → Base → BSC）：
  *           PRIVATE_KEY=<pk> \
  *           FEE_COLLECTOR=<addr> \
- *           LEGACY_IDENTITY=<该链 legacy IdentityRegistry> \
  *           forge script script/DeployCanonicalExtensions.s.sol:DeployCanonicalExtensions \
  *             --rpc-url <RPC> --broadcast --verify --chain <ID>
  *
@@ -55,9 +49,7 @@ import {AgentMigrator} from "../src/erc8004-extensions/AgentMigrator.sol";
  *           FEE_BPS             默认 250（2.5%），0 = 不改
  *           DEPLOY_CONFIG       默认 false
  *           DEPLOY_ENDPOINTS    默认 false
- *           DEPLOY_FACTORY      默认 false（要求 DEPLOY_ENDPOINTS=true）
  *           DEPLOY_VALIDATION   默认 false（P5 上线时置 true）
- *           LEGACY_IDENTITY     默认 0；为 0 时跳过 AgentMigrator
  *
  *         部署完成后把输出地址写入 gateway/.env（`*_<CHAIN>`）与 sdk KNOWN_CHAINS。
  *         未部署的注册表在网关/SDK 侧必须保持零地址（不得继续指向 legacy）。
@@ -75,13 +67,10 @@ contract DeployCanonicalExtensions is Script {
         uint256 feeBps = vm.envOr("FEE_BPS", uint256(250));
         bool deployConfig = vm.envOr("DEPLOY_CONFIG", false);
         bool deployEndpoints = vm.envOr("DEPLOY_ENDPOINTS", false);
-        bool deployFactory = vm.envOr("DEPLOY_FACTORY", false);
         bool deployValidation = vm.envOr("DEPLOY_VALIDATION", false);
-        address legacy = vm.envOr("LEGACY_IDENTITY", address(0));
 
         require(canonical.code.length > 0, "canonical identity has no code");
         require(feeCollector != address(0), "feeCollector is zero");
-        require(!deployFactory || deployEndpoints, "DEPLOY_FACTORY requires DEPLOY_ENDPOINTS");
 
         vm.startBroadcast(pk);
 
@@ -109,13 +98,7 @@ contract DeployCanonicalExtensions is Script {
             endpoints = new MultiEndpointRegistry(canonical);
         }
 
-        // 4) Agent 工厂（依赖 identity + endpoint）
-        AgentFactory factory;
-        if (deployFactory) {
-            factory = new AgentFactory(canonical, address(endpoints));
-        }
-
-        // 5) Validation（verbatim canonical，UUPS 代理）
+        // 4) Validation（verbatim canonical，UUPS 代理）
         ValidationRegistryUpgradeable validationImpl;
         address validation = address(0);
         if (deployValidation) {
@@ -132,12 +115,6 @@ contract DeployCanonicalExtensions is Script {
             validation = address(proxy);
         }
 
-        // 6) 迁移器（可选：仅在配置 LEGACY_IDENTITY 时部署）
-        AgentMigrator migrator;
-        if (legacy != address(0)) {
-            migrator = new AgentMigrator(legacy, canonical);
-        }
-
         vm.stopBroadcast();
 
         // ── 部署即校验 ────────────────────────────────────────────────
@@ -150,20 +127,12 @@ contract DeployCanonicalExtensions is Script {
         if (deployEndpoints) {
             require(address(endpoints.identityRegistry()) == canonical, "endpoints: identity");
         }
-        if (deployFactory) {
-            require(address(factory.identityRegistry()) == canonical, "factory: identity");
-            require(factory.canonicalMode(), "factory: canonical not detected");
-        }
         if (deployValidation) {
             require(
                 ValidationRegistryUpgradeable(validation).getIdentityRegistry() == canonical,
                 "validation: identity"
             );
             require(OwnableUpgradeable(validation).owner() == deployer, "validation: owner");
-        }
-        if (legacy != address(0)) {
-            require(address(migrator.legacyRegistry()) == legacy, "migrator: legacy");
-            require(address(migrator.canonicalRegistry()) == canonical, "migrator: canonical");
         }
 
         // ── 输出（直接对应 gateway/.env 键名）────────────────────────
@@ -187,18 +156,9 @@ contract DeployCanonicalExtensions is Script {
         } else {
             console.log("  MultiEndpointRegistry:      skipped (DEPLOY_ENDPOINTS=false)");
         }
-        if (deployFactory) {
-            console.log("  AgentFactory:              ", address(factory));
-        } else {
-            console.log("  AgentFactory:               skipped (DEPLOY_FACTORY=false)");
-        }
         if (deployValidation) {
             console.log("  ValidationRegistry:        ", validation);
             console.log("    impl:", address(validationImpl));
-        }
-        if (legacy != address(0)) {
-            console.log("  AgentMigrator:             ", address(migrator));
-            console.log("    legacy:", legacy);
         }
         console.log("==============================================");
         console.log("  FeeCollector:", feeCollector);

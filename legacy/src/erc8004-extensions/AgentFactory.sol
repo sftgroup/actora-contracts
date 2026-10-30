@@ -5,8 +5,8 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "../erc8004-interfaces/IERC8004Identity.sol";
-import "./MultiEndpointRegistry.sol";
+import "../../../src/erc8004-interfaces/IERC8004Identity.sol";
+import "../../../src/erc8004-extensions/MultiEndpointRegistry.sol";
 
 /**
  * @title AgentFactory

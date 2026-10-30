@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "../erc8004-interfaces/IERC8004Identity.sol";
+import "../../../src/erc8004-interfaces/IERC8004Identity.sol";
 
 /**
  * @dev legacy 自有 IdentityRegistry 的元数据枚举视图（`getAgentMetadata`）。

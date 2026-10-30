@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Script.sol";
 import {IdentityRegistry} from "../src/IdentityRegistry.sol";
 import {SubscriptionManager} from "../src/SubscriptionManager.sol";
-import {MockUSDC} from "../src/mock/MockUSDC.sol";
+import {MockUSDC} from "../../src/mock/MockUSDC.sol";
 
 /// @title DeployLocal
 /// @notice Deploy a standalone IdentityRegistry + SubscriptionManager on a

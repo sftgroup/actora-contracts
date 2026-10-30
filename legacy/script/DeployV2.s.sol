@@ -7,11 +7,11 @@ import "forge-std/Script.sol";
 import {ERC8004IdentityRegistry} from "../src/erc8004-core/IdentityRegistry.sol";
 import {ReputationRegistry} from "../src/erc8004-core/ReputationRegistry.sol";
 import {ValidationRegistry} from "../src/erc8004-core/ValidationRegistry.sol";
-import {ConfigurationRegistry} from "../src/erc8004-extensions/ConfigurationRegistry.sol";
-import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegistry.sol";
-import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry.sol";
-import {TokenPriceOracle} from "../src/erc8004-extensions/TokenPriceOracle.sol";
-import {ERC8004SubscriptionManager} from "../src/erc8004-extensions/SubscriptionManager.sol";
+import {ConfigurationRegistry} from "../../src/erc8004-extensions/ConfigurationRegistry.sol";
+import {MultiEndpointRegistry} from "../../src/erc8004-extensions/MultiEndpointRegistry.sol";
+import {A2AProtocolRegistry} from "../../src/erc8004-extensions/A2AProtocolRegistry.sol";
+import {TokenPriceOracle} from "../../src/erc8004-extensions/TokenPriceOracle.sol";
+import {ERC8004SubscriptionManager} from "../../src/erc8004-extensions/SubscriptionManager.sol";
 
 /**
  * @title DeployV2

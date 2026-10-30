@@ -12,7 +12,6 @@ import {ERC8004SubscriptionManager} from "../src/erc8004-extensions/Subscription
 import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry.sol";
 import {ConfigurationRegistry} from "../src/erc8004-extensions/ConfigurationRegistry.sol";
 import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegistry.sol";
-import {AgentFactory} from "../src/erc8004-extensions/AgentFactory.sol";
 
 interface IVersioned {
     function getVersion() external view returns (string memory);
@@ -62,7 +61,6 @@ contract ForkCanonicalExtensionsTest is Test {
         A2AProtocolRegistry a2a = new A2AProtocolRegistry(CANONICAL_IDENTITY);
         ConfigurationRegistry config = new ConfigurationRegistry(CANONICAL_IDENTITY);
         MultiEndpointRegistry endpoints = new MultiEndpointRegistry(CANONICAL_IDENTITY);
-        AgentFactory factory = new AgentFactory(CANONICAL_IDENTITY, address(endpoints));
 
         ValidationRegistryUpgradeable impl = new ValidationRegistryUpgradeable();
         ERC8004Bootstrap bootstrap = new ERC8004Bootstrap();
@@ -78,7 +76,6 @@ contract ForkCanonicalExtensionsTest is Test {
         assertGt(address(a2a).code.length, 0, "a2a");
         assertGt(address(config).code.length, 0, "config");
         assertGt(address(endpoints).code.length, 0, "endpoints");
-        assertGt(address(factory).code.length, 0, "factory");
         assertGt(address(proxy).code.length, 0, "validation");
 
         // identity 接线
@@ -86,12 +83,9 @@ contract ForkCanonicalExtensionsTest is Test {
         assertEq(address(a2a.identityRegistry()), CANONICAL_IDENTITY, "a2a: identity");
         assertEq(address(config.identityRegistry()), CANONICAL_IDENTITY, "config: identity");
         assertEq(address(endpoints.identityRegistry()), CANONICAL_IDENTITY, "endpoints: identity");
-        assertEq(address(factory.identityRegistry()), CANONICAL_IDENTITY, "factory: identity");
 
         // 扩展间接线
         assertEq(address(subscriptions.priceOracle()), address(priceOracle), "sm: oracle");
-        assertEq(address(factory.endpointRegistry()), address(endpoints), "factory: endpoints");
-        assertTrue(factory.canonicalMode(), "factory: canonical not detected");
 
         // Validation 代理接线（canonical tag 为 string，6 返回值）
         assertEq(ValidationRegistryUpgradeable(address(proxy)).getIdentityRegistry(), CANONICAL_IDENTITY, "validation: identity");

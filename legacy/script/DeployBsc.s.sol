@@ -6,21 +6,21 @@ import {IdentityRegistry} from "../src/IdentityRegistry.sol";
 import {SubscriptionManager} from "../src/SubscriptionManager.sol";
 // ERC-8004 contracts — renamed to avoid conflict with AgentX IdentityRegistry
 import {ReputationRegistry} from "../src/erc8004-core/ReputationRegistry.sol";
-import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry.sol";
-import {ConfigurationRegistry} from "../src/erc8004-extensions/ConfigurationRegistry.sol";
-import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegistry.sol";
+import {A2AProtocolRegistry} from "../../src/erc8004-extensions/A2AProtocolRegistry.sol";
+import {ConfigurationRegistry} from "../../src/erc8004-extensions/ConfigurationRegistry.sol";
+import {MultiEndpointRegistry} from "../../src/erc8004-extensions/MultiEndpointRegistry.sol";
 
 /**
- * @title DeployBase
+ * @title DeployBsc
  * @notice ⚠️ DEPRECATED（2026-10-22）：生产链请改用 `DeployCanonicalExtensions.s.sol`。
  *         本脚本会 `new IdentityRegistry()`，部署出自建 legacy 身份层，与官方 canonical 单例不兼容。
  *         仅保留用于历史复现 / 独立测试链。
  *
- * @notice Deploy all 6 core AgentX contracts to Base
- *         Chain ID 8453 (mainnet). EIP-1559 supported, so no --legacy flag
- *         needed.
+ * @notice Deploy all 6 core AgentX contracts to BNB Smart Chain (BSC)
+ *         Chain ID 56 (mainnet), 97 (testnet). EIP-1559 supported, so no
+ *         --legacy flag needed.
  *
- *         Deployment order (dependency-aware, same as DeployBsc):
+ *         Deployment order (dependency-aware):
  *           1. IdentityRegistry          — no deps
  *           2. ReputationRegistry        — depends on IdentityRegistry
  *           3. ConfigurationRegistry     — depends on IdentityRegistry
@@ -28,23 +28,24 @@ import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegi
  *           5. A2AProtocolRegistry       — depends on IdentityRegistry
  *           6. SubscriptionManager v3    — no deps (standalone)
  *
- *         Usage (Base mainnet):
- *           PRIVATE_KEY=<deployer-pk> forge script script/DeployBase.s.sol:DeployBase \
- *             --rpc-url https://base-rpc.publicnode.com \
- *             --broadcast --verify --chain 8453
+ *         Usage (BSC mainnet):
+ *           PRIVATE_KEY=<deployer-pk> forge script script/DeployBsc.s.sol:DeployBsc \
+ *             --rpc-url https://bsc-dataseed.binance.org \
+ *             --broadcast --verify --chain 56
  *
- *         IMPORTANT: deployer must hold ETH for gas (Base native gas token is
- *         ETH). After deployment, write the emitted addresses back into the
- *         gateway .env (IDENTITY_REGISTRY_BASE, SUBSCRIPTION_MANAGER_BASE,
- *         A2A_PROTOCOL_BASE, REPUTATION_REGISTRY_BASE,
- *         CONFIGURATION_REGISTRY_BASE, MULTI_ENDPOINT_BASE) and set
- *         PLANS_SYNC_FROM_BLOCK_BASE / SUBSCRIPTIONS_SYNC_FROM_BLOCK_BASE to
- *         the SubscriptionManager deploy block (see the summary log).
- *         Also update sdk KNOWN_CHAINS[8453] (contracts + deployed:true) and
- *         restart the gateway — the market watcher picks the chain up
- *         automatically once the addresses are configured.
+ *         Usage (BSC testnet):
+ *           PRIVATE_KEY=<deployer-pk> forge script script/DeployBsc.s.sol:DeployBsc \
+ *             --rpc-url https://data-seed-prebsc-1-s1.bnbchain.org:8545 \
+ *             --broadcast --verify --chain 97
+ *
+ *         IMPORTANT: deployer must hold BNB for gas. After deployment, write
+ *         the emitted addresses back into the gateway .env (IDENTITY_REGISTRY_BSC,
+ *         SUBSCRIPTION_MANAGER_BSC, A2A_PROTOCOL_BSC, REPUTATION_REGISTRY_BSC,
+ *         CONFIGURATION_REGISTRY_BSC, MULTI_ENDPOINT_BSC) and set
+ *         PLANS_SYNC_FROM_BLOCK_BSC / SUBSCRIPTIONS_SYNC_FROM_BLOCK_BSC to the
+ *         SubscriptionManager deploy block (see the summary log).
  */
-contract DeployBase is Script {
+contract DeployBsc is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         uint256 initialFeeBps = 250; // 2.5% platform fee
@@ -86,7 +87,7 @@ contract DeployBase is Script {
 
         console.log("");
         console.log("==============================================");
-        console.log("  Deployment Summary - Base");
+        console.log("  Deployment Summary - BSC");
         console.log("  ChainId:", block.chainid);
         console.log("  SM deploy block:", block.number);
         console.log("==============================================");

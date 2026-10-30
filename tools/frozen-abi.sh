@@ -18,9 +18,11 @@ cd "$ROOT"
 SNAP_DIR="$ROOT/.frozen-abi"
 
 # 冻结合约清单（fully-qualified target）。新增冻结合约时在此追加。
+# 两个冻结合约已于 2026-10-27 归档至 legacy/，故统一在 legacy profile 下检查。
+export FOUNDRY_PROFILE=legacy
 TARGETS=(
-  "src/IdentityRegistry.sol:IdentityRegistry"
-  "src/SubscriptionManager.sol:SubscriptionManager"
+  "legacy/src/IdentityRegistry.sol:IdentityRegistry"
+  "legacy/src/SubscriptionManager.sol:SubscriptionManager"
 )
 
 MODE="check"

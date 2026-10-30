@@ -10,16 +10,18 @@
 
 | # | Contract | Solc | Address | Source |
 |---|----------|------|---------|--------|
-| 1 | IdentityRegistry | 0.8.24 | `0xe94ad380d3F8d08a7590eda0C84f354a93F96e5F` | `contracts/src/IdentityRegistry.sol` |
-| 2 | SubscriptionManager v3 | 0.8.24 | `0xC15fE80b9d800abb72121F353a6ae6d6E9077E63` | `contracts/src/SubscriptionManager.sol` |
-| 3 | PaymentGateway | 0.8.20 | `0x59eA58c0089314C0fCc86A4ff646fb6dAE571C96` | `contracts/src/platform/PaymentGateway.sol` |
-| 4 | AgentFactory | 0.8.20 | `0xc93eCc808583dd7700bD85D5a7Ad91D54EDbdE7D` | `contracts/src/platform/AgentFactory.sol` |
-| 5 | ReputationRegistry | 0.8.20 | `0xeb6B410ea71b8d9dA0c96f6A91d35027CE143DC9` | `contracts/src/platform/ReputationRegistry.sol` |
-| 6 | ConfigurationRegistry | 0.8.20 | `0x68DcE00e4C9077c94BC68016cD14B09557faEA6c` | `contracts/src/platform/ConfigurationRegistry.sol` |
-| 7 | MultiEndpointRegistry | 0.8.20 | `0xEB5e866f186d4B73F97aa0d70B86f2C6e2e21Cb7` | `contracts/src/platform/MultiEndpointRegistry.sol` |
-| 8 | A2AProtocolRegistry | 0.8.20 | `0xEdb0022c250B38e281B3EF1418037889fC5C6092` | `contracts/src/platform/A2AProtocolRegistry.sol` |
+| 1 | IdentityRegistry | 0.8.24 | `0xe94ad380d3F8d08a7590eda0C84f354a93F96e5F` | `contracts/legacy/src/IdentityRegistry.sol` |
+| 2 | SubscriptionManager v3 | 0.8.24 | `0xC15fE80b9d800abb72121F353a6ae6d6E9077E63` | `contracts/legacy/src/SubscriptionManager.sol` |
+| 3 | PaymentGateway | 0.8.20 | `0x59eA58c0089314C0fCc86A4ff646fb6dAE571C96` | `contracts/legacy/src/erc8004-extensions/PaymentGateway.sol` |
+| 4 | AgentFactory | 0.8.20 | `0xc93eCc808583dd7700bD85D5a7Ad91D54EDbdE7D` | `contracts/legacy/src/erc8004-extensions/AgentFactory.sol` |
+| 5 | ReputationRegistry | 0.8.20 | `0xeb6B410ea71b8d9dA0c96f6A91d35027CE143DC9` | `contracts/legacy/src/erc8004-core/ReputationRegistry.sol` |
+| 6 | ConfigurationRegistry | 0.8.20 | `0x68DcE00e4C9077c94BC68016cD14B09557faEA6c` | `contracts/src/erc8004-extensions/ConfigurationRegistry.sol` |
+| 7 | MultiEndpointRegistry | 0.8.20 | `0xEB5e866f186d4B73F97aa0d70B86f2C6e2e21Cb7` | `contracts/src/erc8004-extensions/MultiEndpointRegistry.sol` |
+| 8 | A2AProtocolRegistry | 0.8.20 | `0xEdb0022c250B38e281B3EF1418037889fC5C6092` | `contracts/src/erc8004-extensions/A2AProtocolRegistry.sol` |
 
 > Sources verified on Sepolia Blockscout. All 8 contracts open-source.
+>
+> **2026-10-27 归档**：`IdentityRegistry`、`SubscriptionManager`、`PaymentGateway`、`AgentFactory`、`ReputationRegistry` 已从 `contracts/src/` 迁至 `contracts/legacy/`（不再参与新部署，仅保留源码与历史地址记录）；`AgentWallet` / `AgentMigrator` 同步归档。
 
 ### OxaChain L1 (19505) — 已下线（2026-10-20）
 
@@ -170,7 +172,7 @@ event SubscriptionCancelled(uint256 indexed subscriptionId);
 event SubscriptionExpired(uint256 indexed subscriptionId);
 event TrialRefunded(uint256 indexed subscriptionId, address indexed subscriber, uint256 amount, address payToken);
 event FundsReleased(uint256 indexed subscriptionId, address indexed creator, uint256 amount, address payToken);
-event PlatformFeeUpdated(uint256 oldFee, uint256 newFee);
+event PlatformFeeUpdated(uint256 indexed agentId, uint256 oldFee, uint256 newFee, address indexed updatedBy, uint256 timestamp);
 event TokenWhitelistUpdated(address indexed token, bool allowed);
 event PlatformFeeCollected(address indexed token, uint256 amount);
 ```
@@ -257,7 +259,7 @@ forge create \
   --private-key "$PRIVATE_KEY" \
   --legacy \
   --broadcast \
-  src/SubscriptionManager.sol:SubscriptionManager \
+  legacy/src/SubscriptionManager.sol:SubscriptionManager \
   --constructor-args <initialFeeBps>
 
 # IdentityRegistry (no constructor args)
@@ -266,7 +268,7 @@ forge create \
   --private-key "$PRIVATE_KEY" \
   --legacy \
   --broadcast \
-  src/IdentityRegistry.sol:IdentityRegistry
+  legacy/src/IdentityRegistry.sol:IdentityRegistry
 ```
 
 ### Verify (Optional)
@@ -276,7 +278,7 @@ forge verify-contract \
   --rpc-url "$SEPOLIA_RPC_URL" \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   <address> \
-  src/SubscriptionManager.sol:SubscriptionManager
+  legacy/src/SubscriptionManager.sol:SubscriptionManager
 ```
 
 ### Post-Deploy Checklist

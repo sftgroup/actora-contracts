@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./IdentityRegistry.sol";
-import "../erc8004-interfaces/IERC8004Identity.sol";
+import "../../../src/erc8004-interfaces/IERC8004Identity.sol";
 
 /**
  * @title BaseReputationRegistry

@@ -19,6 +19,15 @@ ffi = false
 sepolia = "${SEPOLIA_RPC_URL}"
 mainnet = "${MAINNET_RPC_URL}"
 
+# 归档合约（2026-10-27 迁入 legacy/）：默认 profile 不编译，留存源码 +
+# 保留 WS1 冻结合约 ABI 门禁。用法：FOUNDRY_PROFILE=legacy forge test
+[profile.legacy]
+src = "legacy/src"
+test = "legacy/test"
+script = "legacy/script"
+out = "out-legacy"
+cache_path = "cache-legacy"
+
 [etherscan]
 sepolia = { key = "${ETHERSCAN_API_KEY}" }
 mainnet = { key = "${ETHERSCAN_API_KEY}" }

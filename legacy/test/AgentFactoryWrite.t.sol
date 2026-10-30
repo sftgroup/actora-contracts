@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/erc8004-core/IdentityRegistry.sol";
 import "../src/erc8004-extensions/AgentFactory.sol";
-import "../src/erc8004-extensions/MultiEndpointRegistry.sol";
+import "../../src/erc8004-extensions/MultiEndpointRegistry.sol";
 
 /**
  * @dev 最小 canonical 模拟：`register(string)` **非 payable**、0-based；**无** `getCurrentAgentId`，

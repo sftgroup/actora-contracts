@@ -5,10 +5,10 @@ import "forge-std/Test.sol";
 import "../src/erc8004-core/IdentityRegistry.sol";
 import "../src/erc8004-core/ReputationRegistry.sol";
 import "../src/erc8004-core/ValidationRegistry.sol";
-import "../src/erc8004-interfaces/IERC8004Validation.sol";
-import "../src/erc8004-extensions/ConfigurationRegistry.sol";
-import "../src/erc8004-extensions/MultiEndpointRegistry.sol";
-import "../src/erc8004-extensions/A2AProtocolRegistry.sol";
+import "../../src/erc8004-interfaces/IERC8004Validation.sol";
+import "../../src/erc8004-extensions/ConfigurationRegistry.sol";
+import "../../src/erc8004-extensions/MultiEndpointRegistry.sol";
+import "../../src/erc8004-extensions/A2AProtocolRegistry.sol";
 
 /**
  * @title WS4 可插拔身份配置测试

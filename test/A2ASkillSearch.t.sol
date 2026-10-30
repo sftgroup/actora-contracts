@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
-import "../src/erc8004-core/IdentityRegistry.sol";
 import "../src/erc8004-extensions/A2AProtocolRegistry.sol";
 
 /**
@@ -31,7 +30,6 @@ contract MockCanonicalIdentity {
  *         本测试用**无 `getCurrentAgentId`** 的 canonical 模拟证明依赖已去除。
  */
 contract A2ASkillSearchTest is Test {
-    ERC8004IdentityRegistry internal legacy; // 1-based、有 getCurrentAgentId
     MockCanonicalIdentity internal canonical; // 0-based、无 getCurrentAgentId
 
     address internal creator = makeAddr("creator");
@@ -41,7 +39,6 @@ contract A2ASkillSearchTest is Test {
     uint256 internal constant SKILL_IMAGE = 2;
 
     function setUp() public {
-        legacy = new ERC8004IdentityRegistry();
         canonical = new MockCanonicalIdentity();
         vm.deal(creator, 10 ether);
     }
@@ -136,26 +133,11 @@ contract A2ASkillSearchTest is Test {
         assertEq(found[0], 0);
     }
 
-    // ── legacy：回归 ─────────────────────────────────────────────────────
-
-    function test_Legacy_SkillSearch_ReturnsRegisteredAgents() public {
-        A2AProtocolRegistry a2a = new A2AProtocolRegistry(address(legacy));
-
-        vm.prank(creator);
-        uint256 agentId = legacy.register{value: 0.001 ether}("ipfs://a");
-
-        vm.prank(creator);
-        a2a.addAgentSkill(agentId, SKILL_TEXT, "https://legacy.example", "1.0.0", 0, address(0));
-
-        uint256[] memory found = a2a.searchAgentsBySkill(SKILL_TEXT);
-        assertEq(found.length, 1);
-        assertEq(found[0], agentId); // 1-based
-    }
-
-    // ── 切换身份：canonical 起底后 setIdentityRegistry 仍可用 ─────────────
+    // ── 切换身份：setIdentityRegistry 后检索仍可用 ───────────────────────
 
     function test_SwitchIdentity_SkillSearchStillWorks() public {
-        A2AProtocolRegistry a2a = new A2AProtocolRegistry(address(legacy));
+        MockCanonicalIdentity previous = new MockCanonicalIdentity();
+        A2AProtocolRegistry a2a = new A2AProtocolRegistry(address(previous));
         canonical.mint(creator, 0);
         a2a.setIdentityRegistry(address(canonical)); // owner == this
 

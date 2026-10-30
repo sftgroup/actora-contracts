@@ -7,10 +7,10 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "../erc8004-interfaces/IERC8004Identity.sol";
+import "../../../src/erc8004-interfaces/IERC8004Identity.sol";
 import "./AgentWallet.sol";
-import "./SubscriptionManager.sol";
-import "./TokenPriceOracle.sol";
+import "../../../src/erc8004-extensions/SubscriptionManager.sol";
+import "../../../src/erc8004-extensions/TokenPriceOracle.sol";
 
 /**
  * @title PaymentGateway

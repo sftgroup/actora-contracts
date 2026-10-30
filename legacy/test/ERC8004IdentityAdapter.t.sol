@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/IdentityRegistry.sol";
 import "../src/erc8004-extensions/ERC8004IdentityAdapter.sol";
-import "../src/erc8004-extensions/ConfigurationRegistry.sol";
+import "../../src/erc8004-extensions/ConfigurationRegistry.sol";
 
 /**
  * @dev 最小 canonical 模拟：ERC-721 `ownerOf` + 标准 `getMetadata`；**无** `getCurrentAgentId`，

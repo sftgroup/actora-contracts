@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "../erc8004-interfaces/IERC8004Identity.sol";
+import "../../../src/erc8004-interfaces/IERC8004Identity.sol";
 
 /**
  * @title 旧版 IdentityRegistry 的只读子集（仅声明适配器用到的入口）

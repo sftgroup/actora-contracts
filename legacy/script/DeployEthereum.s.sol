@@ -6,21 +6,21 @@ import {IdentityRegistry} from "../src/IdentityRegistry.sol";
 import {SubscriptionManager} from "../src/SubscriptionManager.sol";
 // ERC-8004 contracts — renamed to avoid conflict with AgentX IdentityRegistry
 import {ReputationRegistry} from "../src/erc8004-core/ReputationRegistry.sol";
-import {A2AProtocolRegistry} from "../src/erc8004-extensions/A2AProtocolRegistry.sol";
-import {ConfigurationRegistry} from "../src/erc8004-extensions/ConfigurationRegistry.sol";
-import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegistry.sol";
+import {A2AProtocolRegistry} from "../../src/erc8004-extensions/A2AProtocolRegistry.sol";
+import {ConfigurationRegistry} from "../../src/erc8004-extensions/ConfigurationRegistry.sol";
+import {MultiEndpointRegistry} from "../../src/erc8004-extensions/MultiEndpointRegistry.sol";
 
 /**
- * @title DeployBsc
+ * @title DeployEthereum
  * @notice ⚠️ DEPRECATED（2026-10-22）：生产链请改用 `DeployCanonicalExtensions.s.sol`。
  *         本脚本会 `new IdentityRegistry()`，部署出自建 legacy 身份层，与官方 canonical 单例不兼容。
  *         仅保留用于历史复现 / 独立测试链。
  *
- * @notice Deploy all 6 core AgentX contracts to BNB Smart Chain (BSC)
- *         Chain ID 56 (mainnet), 97 (testnet). EIP-1559 supported, so no
- *         --legacy flag needed.
+ * @notice Deploy all 6 core AgentX contracts to Ethereum Mainnet
+ *         Chain ID 1 (mainnet). EIP-1559 supported, so no --legacy flag
+ *         needed.
  *
- *         Deployment order (dependency-aware):
+ *         Deployment order (dependency-aware, same as DeployBsc):
  *           1. IdentityRegistry          — no deps
  *           2. ReputationRegistry        — depends on IdentityRegistry
  *           3. ConfigurationRegistry     — depends on IdentityRegistry
@@ -28,24 +28,23 @@ import {MultiEndpointRegistry} from "../src/erc8004-extensions/MultiEndpointRegi
  *           5. A2AProtocolRegistry       — depends on IdentityRegistry
  *           6. SubscriptionManager v3    — no deps (standalone)
  *
- *         Usage (BSC mainnet):
- *           PRIVATE_KEY=<deployer-pk> forge script script/DeployBsc.s.sol:DeployBsc \
- *             --rpc-url https://bsc-dataseed.binance.org \
- *             --broadcast --verify --chain 56
+ *         Usage (Ethereum mainnet):
+ *           PRIVATE_KEY=<deployer-pk> forge script script/DeployEthereum.s.sol:DeployEthereum \
+ *             --rpc-url https://ethereum-rpc.publicnode.com \
+ *             --broadcast --verify --chain 1
  *
- *         Usage (BSC testnet):
- *           PRIVATE_KEY=<deployer-pk> forge script script/DeployBsc.s.sol:DeployBsc \
- *             --rpc-url https://data-seed-prebsc-1-s1.bnbchain.org:8545 \
- *             --broadcast --verify --chain 97
- *
- *         IMPORTANT: deployer must hold BNB for gas. After deployment, write
- *         the emitted addresses back into the gateway .env (IDENTITY_REGISTRY_BSC,
- *         SUBSCRIPTION_MANAGER_BSC, A2A_PROTOCOL_BSC, REPUTATION_REGISTRY_BSC,
- *         CONFIGURATION_REGISTRY_BSC, MULTI_ENDPOINT_BSC) and set
- *         PLANS_SYNC_FROM_BLOCK_BSC / SUBSCRIPTIONS_SYNC_FROM_BLOCK_BSC to the
- *         SubscriptionManager deploy block (see the summary log).
+ *         IMPORTANT: deployer must hold ETH for gas. After deployment, write
+ *         the emitted addresses back into the gateway .env
+ *         (IDENTITY_REGISTRY_ETHEREUM, SUBSCRIPTION_MANAGER_ETHEREUM,
+ *         A2A_PROTOCOL_ETHEREUM, REPUTATION_REGISTRY_ETHEREUM,
+ *         CONFIGURATION_REGISTRY_ETHEREUM, MULTI_ENDPOINT_ETHEREUM) and set
+ *         PLANS_SYNC_FROM_BLOCK_ETHEREUM / SUBSCRIPTIONS_SYNC_FROM_BLOCK_ETHEREUM
+ *         to the SubscriptionManager deploy block (see the summary log).
+ *         Also update sdk KNOWN_CHAINS[1] (contracts + deployed:true) and
+ *         restart the gateway — the market watcher picks the chain up
+ *         automatically once the addresses are configured.
  */
-contract DeployBsc is Script {
+contract DeployEthereum is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         uint256 initialFeeBps = 250; // 2.5% platform fee
@@ -87,7 +86,7 @@ contract DeployBsc is Script {
 
         console.log("");
         console.log("==============================================");
-        console.log("  Deployment Summary - BSC");
+        console.log("  Deployment Summary - Ethereum Mainnet");
         console.log("  ChainId:", block.chainid);
         console.log("  SM deploy block:", block.number);
         console.log("==============================================");
