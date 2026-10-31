@@ -79,7 +79,8 @@
 |---|---|---|
 | **现行费率** | **250 bps（2.5%）** | 历史锚点：OxaChain L1 SM 链上验证 = `250`（该链已于 2026-10-20 下线，记录见 `memory/2026-07-14.md`）；`script/Deploy.s.sol` 默认 `INITIAL_PLATFORM_FEE_BPS = 250`；业务口径见 `docs/payment-architecture.md`（「生产 = 250 bps = 2.5%」）与 `sdk/src/config/config.ts` |
 | 部署时构造参数（历史） | 本文件下方记录为 `500` | 旧 v3 部署命令 `--constructor-args 500`；部署后可由 owner 经 `setPlatformFee()` 调整 |
-| 生产链 BSC / ETH / Base | 目标 250 bps（2.5%） | ⚠️ **待链上核验**：读 `platformFeeBps()` on `0x6f18Aa…`(BSC) / `0x7b4002…`(ETH) / `0x0f129e…`(Base)（地址见 `DEPLOYMENT.md §4.2`） |
+| 生产链 BSC / ETH / Base（旧 SM） | **250 bps（2.5%）—— 2026-10-31 三链实测** | `platformFeeBps()` on `0x6f18Aa…`(BSC) / `0x7b4002…`(ETH) / `0x0f129e…`(Base) 均返回 `250` |
+| 生产链 BSC / ETH / Base（新 SM，canonical extensions） | **250 bps（2.5%）—— 2026-10-31 三链实测** | 新 SM 无 `platformFeeBps()`，费率读 `defaultPlatformFee()` = `250`；`platformFeeCollector` 三链同为 `0xA5e3…E6ff` |
 | 允许范围 | 0–2000 bps（0–20%） | `setPlatformFee` 约束 |
 
 - **结论**：历史 `500` 行**不代表现行费率**，保留仅作部署溯源；**对外材料、计费、SDK 一律用 2.5%**。
