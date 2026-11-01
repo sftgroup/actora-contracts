@@ -53,8 +53,24 @@
 |-------|---------|
 | BSC | `0x8017925F7eEcA3713F03983113788321891F7D1f` |
 | Ethereum | `0xBDc6E9a23705D6De23e324A6b4a386dDB254F287` |
-| Base | `0x978e92477ff613c307e25Bf0ed1D50E9483782C4` |
+| Base | `0x978e92477ff613c307e25Bf0ed1D50E9483782C4`（原部署者，**私钥已泄露、已弃用**） |
 | Sepolia | `0x4F7744F97AaC9Ad7f0a67de75b149aDb87464103` |
+
+### Owners & 收款地址（2026-11-01 轮换）
+
+> 2026-11-01：Base 部署者 EOA `0x978e…2C4` 私钥确认泄露。三链 **27 个合约**（每链 9 个）的 `owner` 已全部转出，`platformFeeCollector` 与 `SettlementRegistry` 的 writer 同步更换。全部合约均为**非代理**（`ADMIN_SLOT` / `IMPL_SLOT` 为空），权限面只有各合约 `onlyOwner`。
+>
+> 每链 9 个 = `SubscriptionManager`、`A2AProtocolRegistry`、`TokenPriceOracle`、`ValidationRegistry`、`SettlementRegistry`、`PaymentReputationOracle`、`PaymentReputationOracleV2`、`ConfigurationRegistry`、`MultiEndpointRegistry`。分三轮完成：① 主合约 14 个；② 扩展合约 9 个（V1/V2 oracle + settlement，原属泄露地址）；③ `ConfigurationRegistry` / `MultiEndpointRegistry` 6 个（BSC 属部署者 `0x8017…7D1f`、ETH 属 `0xBDc6…F287`、Base 属泄露地址）。
+
+| 项 | 值 |
+|---|---|
+| 新 owner（冷钱包） | `0xfab6e886cf64b13991ade48a2e7d6aecd1b7ef0a`（27/27 已复验，2026-11-01） |
+| 新 `platformFeeCollector` | `0x1663ed8ebd398aead19fea2ee676fad4bfffbdcb`（三链） |
+| 新 settlement writer（热钱包） | `0x76749c66DBc3B6450b587898ba0046bef93b10d2`（三链 `writers=true`；泄露地址 `writers=false` 已撤销） |
+| 原 owner（已失效） | `0x978e92477ff613c307e25Bf0ed1D50E9483782C4` |
+| 原 collector | `0xA5e36e1D04bA9AE91C17EF01997C89322D5AE6ff`（非泄露，余额已清） |
+| 未纳入轮换 | 三链 X402 Escrow 属 `0xff92…464a`，由 **Keel** 侧控制，**不属我方资产**；三链 `IdentityRegistry` / `ReputationRegistry` 指向官方 ERC-8004 canonical 单例（`0x8004A169…` / `0x8004BAa1…`），非自建、无 owner 权限 |
+| 轮换脚本 | `script/RotateOwnership.s.sol`（9 个扩展合约目标，幂等）、`script/RotateSettlementWriter.s.sol`（`ACTION=grant\|revoke`）、`script/rotate-owner.sh`（三链封装，`DRY_RUN=1` 预演，前置校验 `owner == signer`） |
 
 ---
 
@@ -71,19 +87,19 @@
 | Tx Hash | `0x3dbf09f83e7064b5f53dc7f279049be5c13ffe69e602de6550887d3718830537` |
 | Command | `forge create --legacy --constructor-args 500` |
 
-### 费率说明（平台费率 · 单一来源，2026-10-04 对齐）
+### 费率说明（平台费率 · 单一来源，2026-11-01 三链清零）
 
-> **现行平台费率 = `250` bps = 2.5%（creator 97.5% / 平台 2.5%）。** 以链上 `platformFeeBps()` 读数为**唯一真值**。
+> **现行平台费率 = `0` bps（全链路零抽成）。** 以链上 `defaultPlatformFee()` 读数为**唯一真值**。
 
 | 事项 | 值 | 依据 |
 |---|---|---|
-| **现行费率** | **250 bps（2.5%）** | 历史锚点：OxaChain L1 SM 链上验证 = `250`（该链已于 2026-10-20 下线，记录见 `memory/2026-07-14.md`）；`script/Deploy.s.sol` 默认 `INITIAL_PLATFORM_FEE_BPS = 250`；业务口径见 `docs/payment-architecture.md`（「生产 = 250 bps = 2.5%」）与 `sdk/src/config/config.ts` |
-| 部署时构造参数（历史） | 本文件下方记录为 `500` | 旧 v3 部署命令 `--constructor-args 500`；部署后可由 owner 经 `setPlatformFee()` 调整 |
-| 生产链 BSC / ETH / Base（旧 SM） | **250 bps（2.5%）—— 2026-10-31 三链实测** | `platformFeeBps()` on `0x6f18Aa…`(BSC) / `0x7b4002…`(ETH) / `0x0f129e…`(Base) 均返回 `250` |
-| 生产链 BSC / ETH / Base（新 SM，canonical extensions） | **250 bps（2.5%）—— 2026-10-31 三链实测** | 新 SM 无 `platformFeeBps()`，费率读 `defaultPlatformFee()` = `250`；`platformFeeCollector` 三链同为 `0xA5e3…E6ff` |
-| 允许范围 | 0–2000 bps（0–20%） | `setPlatformFee` 约束 |
+| **现行费率** | **0 bps** | 2026-11-01 三链实测：BSC / Ethereum `defaultPlatformFee()` = `0`；Base `defaultPlatformFee()` = `0`，且 3 个存量 plan 的 `platformFeePercentage` 均为 `0` |
+| 清零执行 | `script/ZeroPlatformFee.s.sol` | BSC 由轮换前 owner 执行；Ethereum / Base 在 owner 转移后由新 owner `0xfab6…EF0a` 执行 |
+| 部署时构造参数（历史） | 本文件下方记录为 `500` | 旧 v3 部署命令 `--constructor-args 500`；部署后曾被改为 `250` |
+| 生产链（2026-10-31 实测，已被上方覆盖） | 250 bps | 旧读数，仅作历史对照 |
+| 允许范围 | 0–2000 bps（0–20%） | `setPlatformFee` / `setDefaultPlatformFee` 约束 |
 
-- **结论**：历史 `500` 行**不代表现行费率**，保留仅作部署溯源；**对外材料、计费、SDK 一律用 2.5%**。
+- **结论**：对外材料、计费、SDK 一律按 **0 抽成**（按次收款直达 `agents.payout_address`）；`0` 是可变配置，owner 可随时调回。
 - 生产链完整地址表（含 BSC/ETH/Base）见 [`DEPLOYMENT.md §4.2`](../DEPLOYMENT.md)。
 
 ### V3 Audit Fixes (from v2 at `0x04CACa...`)
