@@ -254,7 +254,7 @@ function getAgentsByOwner(address owner) external view returns (uint256[] memory
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 
-# Set env vars
+# Set env vars (copy the template first: cp .env.example .env)
 export SEPOLIA_RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
 export PRIVATE_KEY="<deployer-private-key>"
 ```
@@ -262,7 +262,7 @@ export PRIVATE_KEY="<deployer-private-key>"
 ### Build & Test
 
 ```bash
-cd agentx/contracts
+cd contracts
 forge build
 forge test -vvv
 ```
@@ -300,13 +300,12 @@ forge verify-contract \
 
 ### Post-Deploy Checklist
 
-1. Update contract address in `agentx/sdk/src/config/config.ts`
-2. Update `agentx/frontend/.env.production` (`NEXT_PUBLIC_SUBSCRIPTION_MANAGER_ADDRESS`)
-3. Update `agentx/frontend/src/vendor/agentx-sdk/config.ts`
-4. Update this file (`agentx/contracts/CONTRACTS.md`)
-5. Rebuild SDK dist: `cd agentx/sdk && npx tsc`
-6. Push all changes to GitHub
-7. Deploy frontend build to test server
+1. Update contract address in `sdk/src/config/config.ts`
+2. Update the deployment environment (`NEXT_PUBLIC_SUBSCRIPTION_MANAGER_ADDRESS`, see `frontend/.env.example`)
+3. Update this file (`contracts/CONTRACTS.md`)
+4. Rebuild SDK dist: `cd sdk && npm run build`
+5. Push all changes to GitHub
+6. Deploy frontend build to the target server
 
 ---
 
