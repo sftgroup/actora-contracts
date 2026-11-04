@@ -1,0 +1,28 @@
+# NOTICE
+
+Actora (internal codename: Agentx)
+Copyright (c) 2026 sftgroup
+
+This product is licensed under the MIT License (see [LICENSE](./LICENSE)).
+
+## Third-party components
+
+The repository includes or depends on the following third-party software. Their
+licenses apply to those components; the MIT license of this repository does not
+override them.
+
+| Component | Version / source | License | Notes |
+|---|---|---|---|
+| OpenZeppelin Contracts | git submodule `lib/openzeppelin-contracts` | MIT | Unmodified upstream submodule; copyright notices retained upstream |
+| OpenZeppelin Contracts Upgradeable | git submodule `lib/openzeppelin-contracts-upgradeable` | MIT | Unmodified upstream submodule |
+| forge-std | git submodule `lib/forge-std` | MIT | Foundry standard library |
+
+
+## Trademarks
+
+"Actora", "Agentx" and associated logos are **not** licensed under the MIT
+License. See [TRADEMARK.md](./TRADEMARK.md).
+
+## Security disclosures
+
+See [SECURITY.md](./SECURITY.md).

@@ -4,7 +4,7 @@ Please **do not** open a public issue for security problems.
 
 Use GitHub's private vulnerability reporting:
 
-<https://github.com/sftgroup/Agentx/security/advisories/new>
+<https://github.com/sftgroup/actora-contracts/security/advisories/new>
 
 Include the affected component, version or commit, reproduction steps, and impact.
 

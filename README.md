@@ -1,5 +1,7 @@
 # Actora Contracts
 
+[![CI](https://github.com/sftgroup/actora-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/sftgroup/actora-contracts/actions/workflows/ci.yml)
+
 Solidity contracts behind the Actora agent marketplace: ERC-8004 identity,
 reputation, configuration and A2A registries, subscription manager, escrow and
 multi-endpoint support.
