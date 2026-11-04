@@ -37,5 +37,5 @@ third parties.
 ## Contact
 
 For trademark permissions, open an issue at
-<https://github.com/sftgroup/Agentx/issues> or contact the maintainers through
+<https://github.com/sftgroup/actora-contracts/issues> or contact the maintainers through
 the repository's security advisory channel.
