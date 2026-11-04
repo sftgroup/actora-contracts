@@ -298,9 +298,9 @@ forge verify-contract \
   legacy/src/SubscriptionManager.sol:SubscriptionManager
 ```
 
-**主网验证状态（2026-11-05）**
+**主网验证状态（2026-11-05，三链 40 个地址全部 `Pass - Verified`）**
 
-Ethereum 主网（chainId 1）已全部源码验证通过（Etherscan）：
+Ethereum（chainId 1）：
 
 | 合约 | 地址 |
 |---|---|
@@ -308,6 +308,9 @@ Ethereum 主网（chainId 1）已全部源码验证通过（Etherscan）：
 | A2AProtocolRegistry | `0x5a36150C5865B4dA16218724a1c5668561E4d981` |
 | TokenPriceOracle | `0xaD710A1fdF77A09e12e6e140Ad30e11cCb8Cb557` |
 | SettlementRegistry | `0xca738863ec4015a4cde94408dc6b15f0463cf0a7` |
+| SettlementRegistry（备用实例） | `0x26352a7d74c1fc890eb985ebe58671c241ebb2ae` |
+| SettlementRegistryVerifier | `0xf5776cd1c856b4517c1ccba7cb8a21966e53c33a` |
+| PaymentReputationOracle (V1) | `0x072f387799e329e36131f0422bb406f33975b6d9` |
 | PaymentReputationOracleV2 | `0xc1964fd80Da1c924F0fe5380D26C266CE33d398F` |
 | ValidationRegistryUpgradeable（实现） | `0x816f55ed43bae6ce0fa73c3f28af898d14ee70fd` |
 | ERC1967Proxy（Validation 代理） | `0x7d81Cf6b7cFa21675aFB604C8E6451F5565cAB5e` |
@@ -315,12 +318,50 @@ Ethereum 主网（chainId 1）已全部源码验证通过（Etherscan）：
 | ConfigurationRegistry（旧） | `0x2Bf6962301164A301e4fEC9036aB97edcBcE1bCa` |
 | MultiEndpointRegistry（旧） | `0xE93fbED3Df2a5D357856f2f2712B3c1Ebb8d026f` |
 
+BNB Smart Chain（chainId 56）：
+
+| 合约 | 地址 |
+|---|---|
+| ERC8004SubscriptionManager | `0x5a36150C5865B4dA16218724a1c5668561E4d981` |
+| A2AProtocolRegistry | `0x97cad48D250C00A394449A5E613773e82b20089D` |
+| TokenPriceOracle | `0x328125d56E1A84FcCc5fdF363Ac3F62Fb576fA48` |
+| SettlementRegistry | `0x4f623c3DB52cE8b617d96eAed267452a796D03Fa` |
+| SettlementRegistry（备用实例） | `0x277f47a2b8aab8328465cf8e14461f1a19a8f681` |
+| SettlementRegistryVerifier | `0x4e74d14487adf86c19e14a8da58320bc45e28291` |
+| Erc8183Verifier | `0xb3bcf65714c618bd9712d026475498ccf388a6c9` |
+| PaymentReputationOracle (V1) | `0x7aef91EE08ceFc3020783D547362c6Fe411943f7` |
+| PaymentReputationOracleV2 | `0x16782b8911DbCe39D8841A767417Fd24934C2C13` |
+| ValidationRegistryUpgradeable（实现） | `0x259a4ad0d13458d9f82091188082cd81c837aa9c` |
+| ERC1967Proxy（Validation 代理） | `0x3d430c9188bBb8Cfac84024449821F92Ee7C1C76` |
+| ERC8004Bootstrap | `0x4bc9d83507c02da9b60e435784f90512fdaacbe1` |
+| ConfigurationRegistry（旧） | `0xd9B984cF591dc1C3663991e7D75c44C2bDE1a9BB` |
+| MultiEndpointRegistry（旧） | `0x80Bc36634693d7935109f5cdbc95E64a9c1bdA6a` |
+
+Base（chainId 8453）：
+
+| 合约 | 地址 |
+|---|---|
+| ERC8004SubscriptionManager | `0x41A42cDe1bd7AA39a9beB3745Ae08f50e8656B36` |
+| A2AProtocolRegistry | `0x88cce24854505e2d3DC8625a0Bf27Cca10f901C1` |
+| TokenPriceOracle | `0x97cad48D250C00A394449A5E613773e82b20089D` |
+| SettlementRegistry | `0xAA9AD3f55BcbAEFeB3Ba3dE8FD6cC640632fA3fb` |
+| SettlementRegistry（备用实例） | `0x517c4735d44ff729c705f07dbc1af5a893106360` |
+| SettlementRegistryVerifier | `0xf281926a04a3976e62c441d2ae39a9e506302217` |
+| PaymentReputationOracle (V1) | `0x4b9cdbefb6d57b44566c8a0a176836e75650b490` |
+| PaymentReputationOracleV2 | `0x7aef91EE08ceFc3020783D547362c6Fe411943f7` |
+| ValidationRegistryUpgradeable（实现） | `0x7ea168e7c67cde43589d0bdce7d56858344f464e` |
+| ERC1967Proxy（Validation 代理） | `0x17507588a0DacCBa4c30411D4b98F6507C475ae9` |
+| ERC8004Bootstrap | `0x4fc8c015f6569006f1d0ced3897b75698595f57d` |
+| ConfigurationRegistry（旧） | `0x5EF8c35738311B971A64de64487E1E304Ae53993` |
+| MultiEndpointRegistry（旧） | `0xB8065829dBb450B8fC7375D910521EA641EC6Ee5` |
+
 注意：
 
 - `ConfigurationRegistry` / `MultiEndpointRegistry` 是 2026-09 部署的旧版，**当前源码已变更**，必须用部署时的源码（`91de617^`）编译才能匹配；其余合约用当前 `src/` 即可。
+- `IdentityRegistry` / `ReputationRegistry` 三链均为 ERC-8004 官方 canonical 单例（`0x8004A169…` / `0x8004BAa1…`），不属本项目部署，验证状态归上游。
 - 构造参数取自 `broadcast/<Script>/<chainId>/run-latest.json`，不要手填。
-- Etherscan V2 免费 key 只覆盖 chainId 1；BSC（56）/ Base（8453）需各自的 BscScan / BaseScan key，或 Etherscan 付费全链方案。
 - 编译设置必须与部署时一致：`solc 0.8.24` / `evm cancun` / `optimizer 200` / `via_ir = true`。
+- Etherscan V2 单个 key 即可查/验三条链（`chainid=56 / 8453`）；免费档对部分统计类模块（如 `stats`）限链，但 `contract` 模块可用。
 
 ### Post-Deploy Checklist
 
