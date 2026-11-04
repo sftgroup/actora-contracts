@@ -1,0 +1,26 @@
+# gitleaks —— 工作树密钥扫描（CI 门禁）
+[extend]
+useDefault = true
+
+[allowlist]
+description = "构建产物/第三方依赖与已核实的公开测试常量"
+regexTarget = "match"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.next/''',
+  '''(^|/)lib/''',
+  '''(^|/)coverage/''',
+]
+regexes = [
+  # Hardhat / Anvil 公开测试私钥与账户地址
+  '''0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d''',
+  '''0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a''',
+  '''0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC''',
+  # Base USDC 合约地址（公开链上常量）
+  '''0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913''',
+  # 测试用 webhook 签名密钥
+  '''whsec_(publisher|attacker)_secret_[0-9]+''',
+  # .env.example 空占位
+  '''AA_RELAY_API_KEY=\s*''',
+]
