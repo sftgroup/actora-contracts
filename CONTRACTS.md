@@ -288,7 +288,7 @@ forge create \
   legacy/src/IdentityRegistry.sol:IdentityRegistry
 ```
 
-### Verify (Optional)
+### Verify
 
 ```bash
 forge verify-contract \
@@ -297,6 +297,30 @@ forge verify-contract \
   <address> \
   legacy/src/SubscriptionManager.sol:SubscriptionManager
 ```
+
+**主网验证状态（2026-11-05）**
+
+Ethereum 主网（chainId 1）已全部源码验证通过（Etherscan）：
+
+| 合约 | 地址 |
+|---|---|
+| ERC8004SubscriptionManager | `0xF3D14ac4D51BC4B7354838af3137248476D540BD` |
+| A2AProtocolRegistry | `0x5a36150C5865B4dA16218724a1c5668561E4d981` |
+| TokenPriceOracle | `0xaD710A1fdF77A09e12e6e140Ad30e11cCb8Cb557` |
+| SettlementRegistry | `0xca738863ec4015a4cde94408dc6b15f0463cf0a7` |
+| PaymentReputationOracleV2 | `0xc1964fd80Da1c924F0fe5380D26C266CE33d398F` |
+| ValidationRegistryUpgradeable（实现） | `0x816f55ed43bae6ce0fa73c3f28af898d14ee70fd` |
+| ERC1967Proxy（Validation 代理） | `0x7d81Cf6b7cFa21675aFB604C8E6451F5565cAB5e` |
+| ERC8004Bootstrap | `0xf85eb9883dba8a088050686c11b94aaa68f83901` |
+| ConfigurationRegistry（旧） | `0x2Bf6962301164A301e4fEC9036aB97edcBcE1bCa` |
+| MultiEndpointRegistry（旧） | `0xE93fbED3Df2a5D357856f2f2712B3c1Ebb8d026f` |
+
+注意：
+
+- `ConfigurationRegistry` / `MultiEndpointRegistry` 是 2026-09 部署的旧版，**当前源码已变更**，必须用部署时的源码（`91de617^`）编译才能匹配；其余合约用当前 `src/` 即可。
+- 构造参数取自 `broadcast/<Script>/<chainId>/run-latest.json`，不要手填。
+- Etherscan V2 免费 key 只覆盖 chainId 1；BSC（56）/ Base（8453）需各自的 BscScan / BaseScan key，或 Etherscan 付费全链方案。
+- 编译设置必须与部署时一致：`solc 0.8.24` / `evm cancun` / `optimizer 200` / `via_ir = true`。
 
 ### Post-Deploy Checklist
 
